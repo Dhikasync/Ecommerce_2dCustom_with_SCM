@@ -27,4 +27,9 @@ class Variant extends Model
     {
         return $this->hasMany(OrderItem::class);
     }
+
+    public function designs()
+    {
+        return $this->hasMany(Design::class);
+    }
 }

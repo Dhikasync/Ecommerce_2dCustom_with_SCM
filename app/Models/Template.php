@@ -16,4 +16,9 @@ class Template extends Model
     {
         return $this->belongsTo(Product::class);
     }
+
+    public function designs()
+    {
+        return $this->hasMany(Design::class);
+    }
 }
