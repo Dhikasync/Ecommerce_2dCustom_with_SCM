@@ -32,4 +32,9 @@ class Variant extends Model
     {
         return $this->hasMany(Design::class);
     }
+
+    public function purchaseOrderItems()
+    {
+        return $this->hasMany(PurchaseOrderItem::class);
+    }
 }

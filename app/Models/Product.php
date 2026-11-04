@@ -14,6 +14,7 @@ class Product extends Model
         'harga_dasar',
         'gambar',
         'is_aktif',
+        'sla_hari',
     ];
 
     public function category()
@@ -29,5 +30,10 @@ class Product extends Model
     public function template()
     {
         return $this->hasOne(Template::class);
+    }
+
+    public function review()
+    {
+        return $this->hasOne(Review::class);
     }
 }
