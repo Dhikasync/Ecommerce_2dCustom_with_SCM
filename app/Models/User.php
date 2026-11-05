@@ -27,6 +27,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_aktif' => 'boolean'
         ];
     }
 
@@ -50,7 +51,7 @@ class User extends Authenticatable
         return $this->hasMany(Order::class);
     }
 
-    public function review()
+    public function reviews()
     {
         return $this->hasMany(Review::class);
     }

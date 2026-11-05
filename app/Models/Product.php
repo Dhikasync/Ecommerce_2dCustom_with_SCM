@@ -32,7 +32,7 @@ class Product extends Model
         return $this->hasOne(Template::class);
     }
 
-    public function review()
+    public function reviews()
     {
         return $this->hasMany(Review::class);
     }
