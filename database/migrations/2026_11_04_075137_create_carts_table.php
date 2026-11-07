@@ -8,12 +8,15 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
+     *
+     * FR-CART-01 Mengelola Keranjang Belanja: satu keranjang per User,
+     * memuat produk jadi dan produk custom sekaligus.
      */
     public function up(): void
     {
         Schema::create('carts', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('user_id')->unique()->constrained('users')->cascadeOnDelete();
             $table->timestamps();
         });
     }
