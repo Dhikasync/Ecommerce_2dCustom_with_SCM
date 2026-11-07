@@ -2,20 +2,19 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
 
 #[Fillable(['name', 'email', 'password', 'role', 'no_hp', 'foto_profil', 'is_aktif'])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory;
 
     /**
      * Get the attributes that should be cast.
@@ -27,7 +26,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'is_aktif' => 'boolean'
+            'is_aktif' => 'boolean',
         ];
     }
 
@@ -36,9 +35,12 @@ class User extends Authenticatable
         return $this->hasMany(Design::class);
     }
 
-    public function carts()
+    /**
+     * FR-CART-01: satu User hanya punya satu keranjang.
+     */
+    public function cart()
     {
-        return $this->hasMany(Cart::class);
+        return $this->hasOne(Cart::class);
     }
 
     public function addresses()
@@ -56,8 +58,43 @@ class User extends Authenticatable
         return $this->hasMany(Review::class);
     }
 
-    public function notifications()
+    /**
+     * Notifikasi in-app memakai tabel `notifications` milik aplikasi
+     * (judul, pesan, tipe, is_dibaca). Trait Notifiable bawaan Laravel tidak
+     * dipakai karena method notifications()-nya menargetkan skema tabel yang
+     * berbeda; email dikirim lewat Mail/Mailable.
+     */
+    public function appNotifications()
     {
         return $this->hasMany(Notification::class);
+    }
+
+    public function validatedDesignRevisions()
+    {
+        return $this->hasMany(DesignRevision::class, 'divalidasi_oleh');
+    }
+
+    /**
+     * FR-ORDR-02 #2: permohonan pembatalan yang diajukan User.
+     */
+    public function cancellationRequests()
+    {
+        return $this->hasMany(CancellationRequest::class);
+    }
+
+    /**
+     * FR-ORDR-06 #2/#3: permohonan yang diputuskan Admin.
+     */
+    public function decidedCancellationRequests()
+    {
+        return $this->hasMany(CancellationRequest::class, 'diputuskan_oleh');
+    }
+
+    /**
+     * NFR-SEC-07: jejak aksi sensitif yang dilakukan Admin ini.
+     */
+    public function auditLogs()
+    {
+        return $this->hasMany(AuditLog::class);
     }
 }

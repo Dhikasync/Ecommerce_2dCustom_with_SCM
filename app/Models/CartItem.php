@@ -14,6 +14,11 @@ class CartItem extends Model
         'harga_satuan',
     ];
 
+    protected $casts = [
+        'quantity' => 'integer',
+        'harga_satuan' => 'integer',
+    ];
+
     public function cart()
     {
         return $this->belongsTo(Cart::class);

@@ -12,7 +12,13 @@ class PurchaseOrder extends Model
         'status',
         'total_biaya',
         'estimasi_tanggal_kirim',
+        'catatan',
         'alasan_pembatalan',
+    ];
+
+    protected $casts = [
+        'total_biaya' => 'integer',
+        'estimasi_tanggal_kirim' => 'date',
     ];
 
     public function distributor()

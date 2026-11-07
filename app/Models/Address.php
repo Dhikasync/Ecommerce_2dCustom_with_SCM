@@ -6,17 +6,16 @@ use Illuminate\Database\Eloquent\Model;
 
 class Address extends Model
 {
+    /**
+     * FR-PROF-01: alamat hanya menyimpan data yang diminta SRS.
+     * Lokasi mengikuti kode wilayah; label lokasi disimpan sebagai teks
+     * yang ditampilkan ke User dan disalin ke pesanan saat checkout.
+     */
     protected $fillable = [
         'user_id',
         'nama_penerima',
         'no_hp',
-        'label',
         'alamat_lengkap',
-        'provinsi',
-        'kota',
-        'kecamatan',
-        'kelurahan',
-        'kode_pos',
         'kode_lokasi',
         'label_lokasi',
         'is_utama',

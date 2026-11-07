@@ -6,13 +6,27 @@ use Illuminate\Database\Eloquent\Model;
 
 class OrderItem extends Model
 {
+    /**
+     * Nama produk, nama varian, dan SKU disalin saat checkout supaya
+     * FR-PROD-01 #5 tetap terpenuhi: produk boleh dihapus, riwayat pesanan
+     * masih menampilkan apa yang dibeli.
+     */
     protected $fillable = [
         'order_id',
         'variant_id',
         'design_id',
+        'nama_produk',
+        'nama_varian',
+        'sku',
         'quantity',
         'harga_satuan',
         'sla_hari',
+    ];
+
+    protected $casts = [
+        'quantity' => 'integer',
+        'harga_satuan' => 'integer',
+        'sla_hari' => 'integer',
     ];
 
     public function order()
