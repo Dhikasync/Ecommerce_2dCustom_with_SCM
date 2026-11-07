@@ -96,9 +96,25 @@ return [
         'users' => [
             'provider' => 'users',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
-            'expire' => 60,
+            // FR-AUTH-04 #4: tautan reset password berlaku 24 jam (1440 menit).
+            'expire' => 1440,
             'throttle' => 60,
         ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Email Verification Expiry
+    |--------------------------------------------------------------------------
+    |
+    | Masa berlaku tautan verifikasi email, dalam menit. FR-AUTH-06 #3
+    | menetapkan 24 jam; tautan yang lebih lama harus ditolak dan User
+    | ditawari "Kirim Ulang Email Verifikasi".
+    |
+    */
+
+    'verification' => [
+        'expire' => 1440,
     ],
 
     /*
