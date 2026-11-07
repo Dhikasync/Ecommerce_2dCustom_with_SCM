@@ -4,10 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
+    /**
+     * FR-AUTH-02 #1: membuat akun "Belum Diverifikasi", mengirim email
+     * verifikasi, dan TIDAK melakukan login otomatis.
+     */
     public function register(Request $request) 
     {
         $data = $request->validate([
@@ -26,11 +29,11 @@ class AuthController extends Controller
             'is_aktif' => true,
         ]);
 
-        Auth::login($user);
+        $user->sendEmailVerificationNotification();
 
         return response()->json([
-            'message' => 'Registered',
-            'user' => $user,
+            'message' => 'Cek email Anda',
+            'email' => $user->email,
         ], 201);
     }
 

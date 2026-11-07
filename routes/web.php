@@ -14,6 +14,10 @@ Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verify'])
     ->middleware(['signed', 'throttle:6,1'])
     ->name('verification.verify');
 
+Route::post('/register', [AuthController::class, 'register'])
+    ->middleware(['guest', 'throttle:6,1'])
+    ->name('register.store');
+
 Route::get('/products', function () {
     return response()->json(Product::with('category' , 'variants')->get());
 });
