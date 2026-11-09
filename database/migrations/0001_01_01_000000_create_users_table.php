@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
+            $table->string('email_verification_token', 64)->nullable();
             $table->string('password');
             $table->enum('role', ['user', 'admin_ecommerce', 'admin_scm'])->default('user');
             $table->string('no_hp')->nullable();
