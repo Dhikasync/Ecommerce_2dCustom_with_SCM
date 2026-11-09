@@ -7,6 +7,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Exceptions\InvalidSignatureException;
+use Illuminate\Session\Middleware\AuthenticateSession;
 use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -21,6 +22,13 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // FR-AUTH-04: memutus sesi lain saat password berubah. SessionGuard
+        // menyimpan hash password di sesi saat login; middleware ini
+        // membandingkannya dengan hash terbaru pada setiap request.
+        $middleware->web(append: [
+            AuthenticateSession::class,
+        ]);
+
         $middleware->alias([
             // FR-AUTH-01 #7: `role:admin_ecommerce` dan sejenisnya.
             'role' => EnsureUserHasRole::class,

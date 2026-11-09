@@ -103,13 +103,15 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **65 test lulus, 230 assertion** (dijalankan lokal dan otomatis di CI).
+Status terakhir: **73 test lulus, 251 assertion** (dijalankan lokal dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
+Keamanan sesi: password yang berubah (reset) langsung memutus sesi lain lewat `AuthenticateSession`, dan akun Nonaktif ditolak middleware `active` walaupun masih memegang cookie lama.
+
 ## Endpoint yang tersedia
 
-Semua route berada di `routes/web.php` dan memakai session guard. Respons berupa JSON (backend tanpa Blade).
+Semua route dipisah per modul di `routes/*.php` dan memakai session guard. Respons berupa JSON (backend tanpa Blade).
 
 | Metode | Path | Nama route | Middleware | Keterangan |
 | --- | --- | --- | --- | --- |
