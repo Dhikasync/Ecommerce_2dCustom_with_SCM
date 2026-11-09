@@ -45,7 +45,8 @@ Tanpa Breeze/Fortify/Jetstream — autentikasi ditulis manual.
 app/
 ├── Http/
 │   ├── Controllers/AuthController.php   # registrasi, verifikasi, login, reset password, logout
-│   └── Middleware/EnsureUserHasRole.php # penjagaan akses lintas role
+│   └── Middleware/                       # EnsureUserHasRole (lintas role),
+│                                         # EnsureUserIsActive (akun Nonaktif)
 ├── Mail/
 │   ├── VerifyEmailMail.php              # email verifikasi bertoken
 │   └── ResetPasswordMail.php            # email reset password bertoken
