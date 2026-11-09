@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -72,6 +74,49 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Email berhasil diverifikasi, silakan login',
             'redirect' => url('/login'),
+        ]);
+    }
+
+    /**
+     * FR-AUTH-06 #1/#3: halaman "Cek email Anda".
+     */
+    public function notice()
+    {
+        return response()->json([
+            'message' => 'Cek email Anda',
+        ]);
+    }
+
+    /**
+     * FR-AUTH-06 #5/#6: kirim ulang tautan verifikasi.
+     *
+     * Pesan selalu generik supaya tidak membocorkan email mana yang
+     * terdaftar. Batas 5 permintaan per 15 menit per email + IP.
+     */
+    public function resend(Request $request)
+    {
+        $data = $request->validate([
+            'email' => 'required|string|email|max:255',
+        ]);
+
+        $key = 'kirim-verifikasi:'.Str::lower($data['email']).'|'.$request->ip();
+
+        if (RateLimiter::tooManyAttempts($key, 5)) {
+            return response()->json([
+                'message' => 'Terlalu banyak permintaan, coba lagi beberapa saat lagi',
+            ], 429);
+        }
+
+        RateLimiter::hit($key, 15 * 60);
+
+        $user = User::where('email', $data['email'])->first();
+
+        if ($user && ! $user->hasVerifiedEmail()) {
+            $user->sendEmailVerificationNotification();
+        }
+
+        return response()->json([
+            'message' => 'Jika email terdaftar dan belum diverifikasi, tautan verifikasi sudah dikirim',
         ]);
     }
 }
