@@ -103,7 +103,7 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **73 test lulus, 251 assertion** (dijalankan lokal dan otomatis di CI).
+Status terakhir: **77 test lulus, 294 assertion** (dijalankan lokal dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
@@ -120,7 +120,7 @@ Semua route dipisah per modul di `routes/*.php` dan memakai session guard. Respo
 | GET | `/email/verify/{id}/{hash}` | `verification.verify` | `signed`, throttle 6/menit | FR-AUTH-06 |
 | GET | `/email/verify` | `verification.notice` | — | Halaman "Cek email Anda" |
 | POST | `/email/verification-notification` | `verification.send` | batas 5/15 menit per email+IP | Kirim ulang verifikasi |
-| POST | `/login` | `login.store` | `guest` | FR-AUTH-01/03, batas 5 gagal/15 menit |
+| POST | `/login` | `login.store` | `guest` | FR-AUTH-01/03, batas 5 gagal/15 menit per akun, 20 per IP |
 | GET | `/login` | `login` | `guest` | Halaman login |
 | POST | `/logout` | `logout` | `auth` | Mengakhiri sesi |
 | POST | `/forgot-password` | `password.email` | `guest`, throttle 6/menit | FR-AUTH-04 |

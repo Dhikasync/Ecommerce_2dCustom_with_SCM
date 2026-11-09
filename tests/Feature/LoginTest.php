@@ -150,6 +150,83 @@ class LoginTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_lima_kegagalan_mengunci_akun_walau_ip_berganti(): void
+    {
+        $this->user();
+
+        for ($i = 1; $i <= 5; $i++) {
+            $this->postJson('/login', $this->payload(['password' => 'salah123']))
+                ->assertStatus(422);
+        }
+
+        // IP berbeda tidak memberi jatah baru untuk akun yang sama.
+        $this->withServerVariables(['REMOTE_ADDR' => '10.10.10.10'])
+            ->postJson('/login', $this->payload())
+            ->assertStatus(429);
+    }
+
+    public function test_akun_lain_tetap_bisa_login_dari_ip_yang_sama(): void
+    {
+        $this->user();
+
+        User::factory()->create([
+            'email' => 'sari@example.test',
+            'password' => 'rahasia123',
+        ]);
+
+        for ($i = 1; $i <= 5; $i++) {
+            $this->postJson('/login', $this->payload(['password' => 'salah123']))
+                ->assertStatus(422);
+        }
+
+        $this->postJson('/login', [
+            'email' => 'sari@example.test',
+            'password' => 'rahasia123',
+        ])->assertOk();
+    }
+
+    public function test_login_sukses_membersihkan_hitungan_akun(): void
+    {
+        $this->user();
+
+        for ($i = 1; $i <= 4; $i++) {
+            $this->postJson('/login', $this->payload(['password' => 'salah123']))
+                ->assertStatus(422);
+        }
+
+        $this->postJson('/login', $this->payload())->assertOk();
+        $this->postJson('/logout')->assertOk();
+
+        // Jatah akun kembali penuh: 4 kegagalan berikutnya masih 422, bukan 429.
+        for ($i = 1; $i <= 4; $i++) {
+            $this->postJson('/login', $this->payload(['password' => 'salah123']))
+                ->assertStatus(422);
+        }
+    }
+
+    public function test_satu_ip_tidak_bisa_menebak_banyak_akun_tanpa_batas(): void
+    {
+        for ($i = 1; $i <= 20; $i++) {
+            User::factory()->create([
+                'email' => "akun{$i}@example.test",
+                'password' => 'rahasia123',
+            ]);
+        }
+
+        for ($i = 1; $i <= 20; $i++) {
+            $this->postJson('/login', [
+                'email' => "akun{$i}@example.test",
+                'password' => 'salah123',
+            ])->assertStatus(422);
+        }
+
+        // Percobaan ke-21 dari IP yang sama diblokir walau akunnya berbeda.
+        $this->postJson('/login', [
+            'email' => 'akun1@example.test',
+            'password' => 'rahasia123',
+        ])->assertStatus(429);
+    }
+
     public function test_user_yang_sudah_login_diarahkan_ke_halaman_utama(): void
     {
         $user = $this->user();

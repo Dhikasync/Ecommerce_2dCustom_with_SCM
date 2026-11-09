@@ -17,6 +17,17 @@ use Illuminate\Support\Str;
 class AuthController extends Controller
 {
     /**
+     * NFR-SEC-02: setelah 5 kali gagal beruntun, akun dikunci sementara
+     * 15 menit. Batas per IP lebih longgar supaya satu kantor/NAT tidak
+     * saling mengunci, tetapi tetap mencegah satu IP menebak banyak akun.
+     */
+    private const BATAS_GAGAL_PER_AKUN = 5;
+
+    private const BATAS_GAGAL_PER_IP = 20;
+
+    private const JENDELA_KUNCI_DETIK = 15 * 60;
+
+    /**
      * FR-AUTH-02 #1: membuat akun "Belum Diverifikasi", mengirim email
      * verifikasi, dan TIDAK melakukan login otomatis.
      */
@@ -142,7 +153,7 @@ class AuthController extends Controller
      *
      * Kredensial salah, email tidak terdaftar, dan akun nonaktif dibalas
      * dengan pesan yang sama supaya tidak membocorkan email mana yang ada.
-     * Batas 5 kegagalan per 15 menit per email + IP.
+     * Batas 5 kegagalan per akun dan 20 kegagalan per IP dalam 15 menit.
      */
     public function login(Request $request)
     {
@@ -154,9 +165,11 @@ class AuthController extends Controller
             'password.required' => 'Email dan password wajib diisi',
         ]);
 
-        $key = 'login:'.Str::lower($data['email']).'|'.$request->ip();
+        $kunciAkun = 'login-akun:'.Str::lower($data['email']);
+        $kunciIp = 'login-ip:'.$request->ip();
 
-        if (RateLimiter::tooManyAttempts($key, 5)) {
+        if (RateLimiter::tooManyAttempts($kunciAkun, self::BATAS_GAGAL_PER_AKUN)
+            || RateLimiter::tooManyAttempts($kunciIp, self::BATAS_GAGAL_PER_IP)) {
             return response()->json([
                 'message' => 'Terlalu banyak permintaan, coba lagi beberapa saat lagi',
             ], 429);
@@ -167,7 +180,8 @@ class AuthController extends Controller
         $kredensialSalah = ! $user || ! Hash::check($data['password'], $user->password);
 
         if ($kredensialSalah || ! $user->is_aktif) {
-            RateLimiter::hit($key, 15 * 60);
+            RateLimiter::hit($kunciAkun, self::JENDELA_KUNCI_DETIK);
+            RateLimiter::hit($kunciIp, self::JENDELA_KUNCI_DETIK);
 
             return response()->json([
                 'message' => 'Email atau password salah',
@@ -183,7 +197,11 @@ class AuthController extends Controller
 
         Auth::login($user);
         $request->session()->regenerate();
-        RateLimiter::clear($key);
+
+        // Hanya hitungan akun yang dibersihkan. Hitungan IP sengaja dibiarkan
+        // agar penyerang tidak bisa mereset jatah IP-nya dengan login ke akun
+        // miliknya sendiri.
+        RateLimiter::clear($kunciAkun);
 
         return response()->json([
             'message' => 'Login berhasil',
