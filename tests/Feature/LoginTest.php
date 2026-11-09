@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class LoginTest extends TestCase
@@ -88,6 +89,20 @@ class LoginTest extends TestCase
             ->assertJson(['message' => self::PESAN_KREDENSIAL]);
 
         $this->assertGuest();
+    }
+
+    public function test_email_tidak_terdaftar_tetap_memeriksa_hash_password(): void
+    {
+        // Tanpa hash palsu, email tak terdaftar kembali tanpa memanggil bcrypt,
+        // sehingga waktunya bisa dipakai menebak email mana yang punya akun.
+        Hash::shouldReceive('check')->once()->andReturnFalse();
+
+        $this->postJson('/login', [
+            'email' => 'tidak-ada@example.test',
+            'password' => 'rahasia123',
+        ])
+            ->assertStatus(422)
+            ->assertJson(['message' => self::PESAN_KREDENSIAL]);
     }
 
     public function test_akun_belum_verifikasi_ditolak_dan_boleh_kirim_ulang(): void

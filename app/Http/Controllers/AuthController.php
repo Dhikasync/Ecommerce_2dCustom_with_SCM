@@ -28,6 +28,13 @@ class AuthController extends Controller
     private const JENDELA_KUNCI_DETIK = 15 * 60;
 
     /**
+     * Hash bcrypt dari string acak, hanya untuk menyamakan biaya verifikasi
+     * saat email tidak ditemukan. Dibuat dengan cost 12, sama dengan
+     * BCRYPT_ROUNDS di .env.example. Kalau cost diubah, buat ulang hash ini.
+     */
+    private const HASH_PALSU = '$2y$12$Zcb8I3ItxN3/X42kvYN/2uryGwYsvm2zEmfKBecaTDYhAjOlghQ0i';
+
+    /**
      * FR-AUTH-02 #1: membuat akun "Belum Diverifikasi", mengirim email
      * verifikasi, dan TIDAK melakukan login otomatis.
      */
@@ -130,7 +137,9 @@ class AuthController extends Controller
         $user = User::where('email', $data['email'])->first();
 
         if ($user && ! $user->hasVerifiedEmail()) {
-            $user->sendEmailVerificationNotification();
+            // Sama seperti lupa password: pengiriman email tidak boleh
+            // membedakan waktu respons email terdaftar dan tak terdaftar.
+            defer(fn () => $user->sendEmailVerificationNotification());
         }
 
         return response()->json([
@@ -177,7 +186,14 @@ class AuthController extends Controller
 
         $user = User::where('email', $data['email'])->first();
 
-        $kredensialSalah = ! $user || ! Hash::check($data['password'], $user->password);
+        // Hash selalu diperiksa, termasuk saat email tidak ditemukan. Tanpa
+        // ini, respons untuk email tak terdaftar kembali secepat kueri
+        // database sementara email terdaftar membayar bcrypt (~225 ms),
+        // sehingga form login bisa dipakai memetakan email admin.
+        $hash = $user?->password ?? self::HASH_PALSU;
+        $cocok = Hash::check($data['password'], $hash);
+
+        $kredensialSalah = ! $user || ! $cocok;
 
         if ($kredensialSalah || ! $user->is_aktif) {
             RateLimiter::hit($kunciAkun, self::JENDELA_KUNCI_DETIK);
@@ -243,9 +259,13 @@ class AuthController extends Controller
         $user = User::where('email', $data['email'])->first();
 
         if ($user) {
-            $token = Password::broker()->createToken($user);
+            // Token dibuat dan email dikirim setelah respons terkirim, supaya
+            // email terdaftar tidak lebih lambat dari email tak terdaftar.
+            defer(function () use ($user) {
+                $token = Password::broker()->createToken($user);
 
-            Mail::to($user->email)->send(new ResetPasswordMail($user, $token));
+                Mail::to($user->email)->send(new ResetPasswordMail($user, $token));
+            });
         }
 
         return response()->json([
