@@ -24,6 +24,14 @@ Route::get('/email/verify', [AuthController::class, 'notice'])
 Route::post('/email/verification-notification', [AuthController::class, 'resend'])
     ->name('verification.send');
 
+Route::get('/login', [AuthController::class, 'showLogin'])
+    ->middleware('guest')
+    ->name('login');
+
+Route::post('/login', [AuthController::class, 'login'])
+    ->middleware('guest')
+    ->name('login.store');
+
 Route::get('/products', function () {
     return response()->json(Product::with('category' , 'variants')->get());
 });
