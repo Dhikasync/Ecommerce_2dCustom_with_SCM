@@ -1,8 +1,8 @@
 <?php
 
 use App\Http\Controllers\AuthController;
-use Illuminate\Support\Facades\Route;
 use App\Models\Product;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return response()->json([
@@ -49,5 +49,5 @@ Route::post('/reset-password', [AuthController::class, 'resetPassword'])
     ->name('password.store');
 
 Route::get('/products', function () {
-    return response()->json(Product::with('category' , 'variants')->get());
+    return response()->json(Product::with('category', 'variants')->get());
 });

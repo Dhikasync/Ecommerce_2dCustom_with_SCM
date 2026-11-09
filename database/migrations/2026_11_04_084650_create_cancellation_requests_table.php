@@ -41,25 +41,25 @@ return new class extends Migration
         // yang sudah diputuskan tetap tersimpan sebagai riwayat.
         DB::statement(
             'create unique index cancellation_requests_pending_unique '
-            . 'on cancellation_requests (order_id) where status = \'menunggu_persetujuan\''
+            .'on cancellation_requests (order_id) where status = \'menunggu_persetujuan\''
         );
 
         // FR-ORDR-02 #2: alasan pengajuan wajib diisi.
         DB::statement(
             'alter table cancellation_requests add constraint cancellation_requests_alasan_check '
-            . 'check (btrim(alasan) <> \'\')'
+            .'check (btrim(alasan) <> \'\')'
         );
 
         // FR-ORDR-06 #2: menyetujui wajib memilih perlakuan stok.
         DB::statement(
             'alter table cancellation_requests add constraint cancellation_requests_keputusan_stok_check '
-            . 'check (status <> \'disetujui\' or stok_dikembalikan is not null)'
+            .'check (status <> \'disetujui\' or stok_dikembalikan is not null)'
         );
 
         // FR-ORDR-06 #3 dan #4: menolak wajib menyertakan alasan.
         DB::statement(
             'alter table cancellation_requests add constraint cancellation_requests_alasan_penolakan_check '
-            . 'check (status <> \'ditolak\' or (alasan_penolakan is not null and btrim(alasan_penolakan) <> \'\'))'
+            .'check (status <> \'ditolak\' or (alasan_penolakan is not null and btrim(alasan_penolakan) <> \'\'))'
         );
     }
 

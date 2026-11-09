@@ -83,7 +83,7 @@ class SchemaIntegrityTest extends TestCase
                 }
             }
 
-            return 'lain: ' . $e->getMessage();
+            return 'lain: '.$e->getMessage();
         }
 
         return null;

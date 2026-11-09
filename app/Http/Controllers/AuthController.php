@@ -5,13 +5,13 @@ namespace App\Http\Controllers;
 use App\Mail\ResetPasswordMail;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 class AuthController extends Controller
@@ -20,7 +20,7 @@ class AuthController extends Controller
      * FR-AUTH-02 #1: membuat akun "Belum Diverifikasi", mengirim email
      * verifikasi, dan TIDAK melakukan login otomatis.
      */
-    public function register(Request $request) 
+    public function register(Request $request)
     {
         $data = $request->validate([
             'name' => 'required|string|max:255',

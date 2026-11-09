@@ -14,9 +14,7 @@ use Illuminate\Support\Facades\URL;
  */
 class VerifyEmailMail extends Mailable
 {
-    public function __construct(public User $user)
-    {
-    }
+    public function __construct(public User $user) {}
 
     /**
      * Tautan 24 jam: id + hash email + token, ditandatangani APP_KEY.

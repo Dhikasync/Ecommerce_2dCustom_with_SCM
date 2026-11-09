@@ -15,9 +15,7 @@ use Illuminate\Mail\Mailables\Envelope;
  */
 class ResetPasswordMail extends Mailable
 {
-    public function __construct(public User $user, public string $token)
-    {
-    }
+    public function __construct(public User $user, public string $token) {}
 
     /**
      * Tautan 24 jam sesuai FR-AUTH-04 #4 (config auth.passwords.users.expire).
