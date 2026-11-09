@@ -6,10 +6,12 @@ use App\Mail\ResetPasswordMail;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 class AuthController extends Controller
@@ -245,6 +247,68 @@ class AuthController extends Controller
             'message' => 'Silakan masukkan password baru',
             'token' => $token,
             'email' => $request->query('email'),
+        ]);
+    }
+
+    /**
+     * FR-AUTH-04 #3-#5: menyimpan password baru dari tautan reset.
+     *
+     * Token diperiksa lebih dulu supaya kedaluwarsa bisa dibedakan dari
+     * token yang tidak dikenal; PasswordBroker yang membandingkan hash
+     * token dan menghapusnya setelah dipakai (sekali pakai).
+     */
+    public function resetPassword(Request $request)
+    {
+        $data = $request->validate([
+            'token' => 'required|string',
+            'email' => 'required|string|email|max:255',
+            'password' => 'required|string|min:8|confirmed',
+        ], [
+            'password.required' => 'Password baru wajib diisi',
+            'password.min' => 'Password minimal 8 karakter',
+            'password.confirmed' => 'Konfirmasi password tidak sesuai',
+        ]);
+
+        $tabel = config('auth.passwords.users.table');
+        $record = DB::table($tabel)->where('email', $data['email'])->first();
+
+        if (! $record) {
+            return response()->json([
+                'message' => 'Link reset tidak valid atau sudah dipakai',
+            ], 422);
+        }
+
+        $kedaluwarsa = Carbon::parse($record->created_at)
+            ->addMinutes(config('auth.passwords.users.expire'))
+            ->isPast();
+
+        if ($kedaluwarsa) {
+            DB::table($tabel)->where('email', $data['email'])->delete();
+
+            return response()->json([
+                'message' => 'Link reset sudah kedaluwarsa, silakan minta ulang',
+            ], 422);
+        }
+
+        $status = Password::reset(
+            $request->only('email', 'password', 'password_confirmation', 'token'),
+            function (User $user, string $password) {
+                $user->forceFill([
+                    'password' => $password,
+                    'remember_token' => Str::random(60),
+                ])->save();
+            },
+        );
+
+        if ($status !== Password::PASSWORD_RESET) {
+            return response()->json([
+                'message' => 'Link reset tidak valid atau sudah dipakai',
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Password berhasil diubah, silakan login',
+            'redirect' => url('/login'),
         ]);
     }
 }

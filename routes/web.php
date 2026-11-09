@@ -44,6 +44,10 @@ Route::get('/reset-password/{token}', [AuthController::class, 'showReset'])
     ->middleware('guest')
     ->name('password.reset');
 
+Route::post('/reset-password', [AuthController::class, 'resetPassword'])
+    ->middleware('guest')
+    ->name('password.store');
+
 Route::get('/products', function () {
     return response()->json(Product::with('category' , 'variants')->get());
 });
