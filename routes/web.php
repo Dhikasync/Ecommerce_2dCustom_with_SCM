@@ -32,6 +32,10 @@ Route::post('/login', [AuthController::class, 'login'])
     ->middleware('guest')
     ->name('login.store');
 
+Route::post('/logout', [AuthController::class, 'logout'])
+    ->middleware('auth')
+    ->name('logout');
+
 Route::get('/products', function () {
     return response()->json(Product::with('category' , 'variants')->get());
 });

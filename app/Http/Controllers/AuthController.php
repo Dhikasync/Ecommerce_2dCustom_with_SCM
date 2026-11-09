@@ -186,4 +186,22 @@ class AuthController extends Controller
             'redirect' => redirect()->intended(route('home'))->getTargetUrl(),
         ]);
     }
+
+    /**
+     * FR-AUTH-01 #5, FR-AUTH-03: mengakhiri sesi.
+     *
+     * Sesi dibuang seluruhnya dan token CSRF dibuat ulang, sehingga ID sesi
+     * maupun token lama tidak bisa dipakai lagi.
+     */
+    public function logout(Request $request)
+    {
+        Auth::logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return response()->json([
+            'message' => 'Logout berhasil',
+        ]);
+    }
 }
