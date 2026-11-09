@@ -50,6 +50,8 @@ integration and 2D custom design. Laravel (PHP 8.5), PostgreSQL (nichibag_db).
 
 - Build locally first, push to `main` when a step is verified. Never force
   push. Never commit `.env` or `vendor/`.
+- Every push and PR to `main` runs `.github/workflows/tests.yml` (Pint +
+  PHPUnit on PostgreSQL). A step is not done until that run is green.
 
 ## Skills to use
 

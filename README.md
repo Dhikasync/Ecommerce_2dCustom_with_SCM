@@ -8,7 +8,7 @@ Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS 
   <img alt="PHP" src="https://img.shields.io/badge/PHP-%5E8.3-777BB4?logo=php&logoColor=white">
   <img alt="Laravel" src="https://img.shields.io/badge/Laravel-13-FF2D20?logo=laravel&logoColor=white">
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white">
-  <img alt="PHPUnit" src="https://img.shields.io/badge/test-65%20lulus-2ea44f">
+  <img alt="CI" src="https://github.com/Dhikasync/Ecommerce_2dCustom_with_SCM/actions/workflows/tests.yml/badge.svg">
   <img alt="Versi" src="https://img.shields.io/badge/versi-v0.3.0-blue">
 </p>
 
@@ -102,7 +102,9 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **65 test lulus, 230 assertion**.
+Status terakhir: **65 test lulus, 230 assertion** (dijalankan lokal dan otomatis di CI).
+
+Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
 ## Endpoint yang tersedia
 
@@ -139,6 +141,7 @@ Semua route berada di `routes/web.php` dan memakai session guard. Respons berupa
 - Commit memakai Conventional Commits dan menyebut kode FR, misalnya `feat(auth): login ... (FR-AUTH-01, FR-AUTH-03)`.
 - Rilis ditandai tag annotated: `v0.1.0` (skema), `v0.2.0` (auth inti), `v0.3.0` (reset password + role).
 - `.env` dan `vendor/` tidak pernah di-commit.
+- Setiap push dijalankan Pint + PHPUnit lewat GitHub Actions; `main` tidak boleh merah.
 
 ## Dokumen acuan
 
