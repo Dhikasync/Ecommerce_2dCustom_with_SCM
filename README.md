@@ -1,58 +1,145 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Nichibag — Marketplace Toko Nichibag
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
+Backend marketplace untuk **Toko Nichibag**: penjualan tas dengan **desain kustom 2D** dan **integrasi rantai pasok** (bahan baku, distributor, purchase order, penerimaan barang).
+
+Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS v1.0** dan **User Story v1.1.4**. Saat ini fokusnya backend JSON; antarmuka belum dibangun.
+
+<p>
+  <img alt="PHP" src="https://img.shields.io/badge/PHP-%5E8.3-777BB4?logo=php&logoColor=white">
+  <img alt="Laravel" src="https://img.shields.io/badge/Laravel-13-FF2D20?logo=laravel&logoColor=white">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white">
+  <img alt="PHPUnit" src="https://img.shields.io/badge/test-65%20lulus-2ea44f">
+  <img alt="Versi" src="https://img.shields.io/badge/versi-v0.3.0-blue">
 </p>
 
-## About Laravel
+## Status
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+| Modul | Kode | Status |
+| --- | --- | --- |
+| Autentikasi | FR-AUTH | ✅ Login, registrasi, verifikasi email, reset password, logout, middleware role |
+| Katalog produk | FR-KTLG | ⏳ berikutnya |
+| Keranjang & checkout | FR-CART | ⏳ |
+| Pesanan & pembayaran | FR-ORDR, FR-PAYM | ⏳ |
+| Desain kustom 2D | FR-DSN | ⏳ |
+| Rantai pasok (SCM) | FR-SCM | ⏳ |
+| Profil & alamat | FR-PROF | ⏳ |
+| Dashboard admin | FR-DASH | ⏳ ditunda sampai UI dimulai |
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Catatan jujur: login Admin sudah berjalan, tetapi **dashboard belum ada**; sementara Admin diarahkan ke halaman utama. Verifikasi email baru dari halaman profil (FR-AUTH-06 #7) menunggu modul profil.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Tumpukan teknologi
 
-## Learning Laravel
+| Bagian | Teknologi |
+| --- | --- |
+| Bahasa | PHP ^8.3 (dikembangkan di PHP 8.5) |
+| Framework | Laravel 13 |
+| Basis data | PostgreSQL 18 |
+| Pengujian | PHPUnit 12 |
+| Frontend | Vite 7 + Tailwind 4 (belum dipakai; direncanakan untuk tahap UI) |
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+Tanpa Breeze/Fortify/Jetstream — autentikasi ditulis manual.
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Struktur penting
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+```
+app/
+├── Http/
+│   ├── Controllers/AuthController.php   # registrasi, verifikasi, login, reset password, logout
+│   └── Middleware/EnsureUserHasRole.php # penjagaan akses lintas role
+├── Mail/
+│   ├── VerifyEmailMail.php              # email verifikasi bertoken
+│   └── ResetPasswordMail.php            # email reset password bertoken
+└── Models/                              # 27 model sesuai skema SRS
 
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+bootstrap/app.php                        # alias middleware + handler JSON untuk tautan kedaluwarsa
+database/migrations/                     # 30 migrasi
+routes/web.php                           # seluruh route (session guard)
+tests/Feature/                           # pengujian perilaku per kebutuhan
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+## Menjalankan di lokal
 
-## Contributing
+Prasyarat: PHP 8.3+, Composer, PostgreSQL 15+, ekstensi `pdo_pgsql`.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+git clone https://github.com/Dhikasync/Ecommerce_2dCustom_with_SCM.git
+cd Ecommerce_2dCustom_with_SCM
+composer install
+copy .env.example .env          # Windows; pakai cp di Linux/macOS
+php artisan key:generate
+```
 
-## Code of Conduct
+Buat dua basis data:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```sql
+CREATE DATABASE nichibag_db;
+CREATE DATABASE nichibag_test;
+```
 
-## Security Vulnerabilities
+Sesuaikan `.env`:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```env
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=nichibag_db
+DB_USERNAME=postgres
+DB_PASSWORD=...
+```
 
-## License
+Lalu:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+php artisan migrate
+php artisan serve          # http://127.0.0.1:8000
+```
+
+## Pengujian
+
+```bash
+php artisan test
+```
+
+Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
+
+Status terakhir: **65 test lulus, 230 assertion**.
+
+## Endpoint yang tersedia
+
+Semua route berada di `routes/web.php` dan memakai session guard. Respons berupa JSON (backend tanpa Blade).
+
+| Metode | Path | Nama route | Middleware | Keterangan |
+| --- | --- | --- | --- | --- |
+| GET | `/` | `home` | — | Halaman utama (sementara JSON) |
+| POST | `/register` | `register.store` | `guest`, throttle 6/menit | FR-AUTH-02 |
+| GET | `/email/verify/{id}/{hash}` | `verification.verify` | `signed`, throttle 6/menit | FR-AUTH-06 |
+| GET | `/email/verify` | `verification.notice` | — | Halaman "Cek email Anda" |
+| POST | `/email/verification-notification` | `verification.send` | batas 5/15 menit per email+IP | Kirim ulang verifikasi |
+| POST | `/login` | `login.store` | `guest` | FR-AUTH-01/03, batas 5 gagal/15 menit |
+| GET | `/login` | `login` | `guest` | Halaman login |
+| POST | `/logout` | `logout` | `auth` | Mengakhiri sesi |
+| POST | `/forgot-password` | `password.email` | `guest`, throttle 6/menit | FR-AUTH-04 |
+| GET | `/reset-password/{token}` | `password.reset` | `guest` | Halaman password baru |
+| POST | `/reset-password` | `password.store` | `guest` | Simpan password baru (sekali pakai, 24 jam) |
+| GET | `/products` | — | — | Scaffolding katalog, belum final |
+
+## Aturan proyek yang tidak boleh dilanggar
+
+- Pembayaran **hanya lewat gateway**; tidak ada pembayaran manual maupun status "Menunggu Verifikasi".
+- Tidak ada Super Admin dan tidak ada pengelolaan akun Admin di dalam aplikasi. Akun Admin dibuat saat penyiapan sistem.
+- Dashboard hanya untuk Admin (Ecommerce/SCM); User tidak pernah melihat dashboard.
+- Stok hanya per varian/SKU: `stok_fisik`, `stok_direservasi`, dan `Tersedia = Fisik − Direservasi` dihitung, bukan disimpan.
+- Kategori memakai `restrict`; produk harus dipindahkan dulu sebelum kategori dihapus.
+- Laporan keuangan adalah laporan, bukan tabel.
+- Setiap tabel memiliki timestamp; nama kolom bisnis memakai Bahasa Indonesia.
+
+## Alur kerja Git
+
+- `main` selalu hijau; pekerjaan dilakukan di branch `feat/*`, lalu di-merge dengan `--no-ff`.
+- Commit memakai Conventional Commits dan menyebut kode FR, misalnya `feat(auth): login ... (FR-AUTH-01, FR-AUTH-03)`.
+- Rilis ditandai tag annotated: `v0.1.0` (skema), `v0.2.0` (auth inti), `v0.3.0` (reset password + role).
+- `.env` dan `vendor/` tidak pernah di-commit.
+
+## Dokumen acuan
+
+SRS v1.0 dan User Story v1.1.4 adalah satu-satunya sumber kebenaran untuk tabel, kolom, status, dan aturan bisnis. Dokumen tersebut tidak disertakan di repositori ini.
