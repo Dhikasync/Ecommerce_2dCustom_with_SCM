@@ -35,8 +35,9 @@ integration and 2D custom design. Laravel (PHP 8.5), PostgreSQL (nichibag_db).
 - Auth is manual — no Breeze/Fortify/Jetstream. Register/login written by
   hand. On register: role is fixed to `'user'` (ignore any role in the
   request), password is passed plain so the model's `hashed` cast hashes it
-  (never `Hash::make` it or it double-hashes), regenerate the session after
-  `Auth::login`, throttle auth routes.
+  once (`Hash::make` would not double-hash in Laravel 13 because the cast
+  checks `Hash::isHashed()`, but keep hashing in one place), regenerate the
+  session after `Auth::login`, throttle auth routes.
 - Stock is per variant/SKU only: `stok_fisik`, `stok_direservasi`,
   `Tersedia = Fisik - Direservasi` (calculated, never stored). Checkout
   reserves stock; Lunas drops Fisik; cancel before Lunas releases the
