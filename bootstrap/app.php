@@ -6,12 +6,18 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Exceptions\InvalidSignatureException;
+use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        // Modul SRS dipisah per file. Middleware `web` ditulis eksplisit di
+        // sini karena group itu hanya otomatis untuk routes/web.php.
+        then: function () {
+            Route::middleware('web')->group(base_path('routes/auth.php'));
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // FR-AUTH-01 #7: `role:admin_ecommerce` dan sejenisnya.
