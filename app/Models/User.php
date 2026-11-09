@@ -5,33 +5,40 @@ namespace App\Models;
 use App\Mail\VerifyEmailMail;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
-#[Fillable(['name', 'email', 'password', 'role', 'no_hp', 'foto_profil', 'is_aktif'])]
-#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory;
 
     /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
+     * Kolom yang boleh diisi massal. `role` sengaja ada di sini supaya
+     * pembatasan role dilakukan di controller (FR-AUTH-01 #7), bukan di model.
      */
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'is_aktif' => 'boolean',
-        ];
-    }
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+        'role',
+        'no_hp',
+        'foto_profil',
+        'is_aktif',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+        'is_aktif' => 'boolean',
+    ];
 
     /**
      * FR-AUTH-06 #5: setiap pengiriman membuat token baru, sehingga
