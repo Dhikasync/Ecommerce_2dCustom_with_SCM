@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ResetPasswordMail;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 
@@ -202,6 +205,46 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Logout berhasil',
+        ]);
+    }
+
+    /**
+     * FR-AUTH-04 #1/#2: permintaan tautan reset password.
+     *
+     * Pesan selalu sama, baik email terdaftar maupun tidak, supaya form ini
+     * tidak bisa dipakai memeriksa email mana yang punya akun.
+     */
+    public function forgotPassword(Request $request)
+    {
+        $data = $request->validate([
+            'email' => 'required|string|email|max:255',
+        ]);
+
+        $user = User::where('email', $data['email'])->first();
+
+        if ($user) {
+            $token = Password::broker()->createToken($user);
+
+            Mail::to($user->email)->send(new ResetPasswordMail($user, $token));
+        }
+
+        return response()->json([
+            'message' => 'Jika email terdaftar, link reset telah dikirim',
+        ]);
+    }
+
+    /**
+     * FR-AUTH-04 #3: halaman pengisian password baru.
+     *
+     * Endpoint ini hanya mengembalikan data yang dibutuhkan form; token
+     * baru diperiksa saat password disimpan.
+     */
+    public function showReset(Request $request, string $token)
+    {
+        return response()->json([
+            'message' => 'Silakan masukkan password baru',
+            'token' => $token,
+            'email' => $request->query('email'),
         ]);
     }
 }
