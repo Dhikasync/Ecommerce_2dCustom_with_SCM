@@ -36,6 +36,18 @@ Route::post('/logout', [AuthController::class, 'logout'])
     ->middleware('auth')
     ->name('logout');
 
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])
+    ->middleware(['guest', 'throttle:6,1'])
+    ->name('password.email');
+
+Route::get('/reset-password/{token}', [AuthController::class, 'showReset'])
+    ->middleware('guest')
+    ->name('password.reset');
+
+Route::post('/reset-password', [AuthController::class, 'resetPassword'])
+    ->middleware('guest')
+    ->name('password.store');
+
 Route::get('/products', function () {
     return response()->json(Product::with('category' , 'variants')->get());
 });

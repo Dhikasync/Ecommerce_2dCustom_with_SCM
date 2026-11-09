@@ -44,6 +44,14 @@ class User extends Authenticatable implements MustVerifyEmail
         Mail::to($this->email)->send(new VerifyEmailMail($this));
     }
 
+    /**
+     * FR-AUTH-01 #7: apakah user memegang salah satu role yang diminta.
+     */
+    public function hasRole(string ...$roles): bool
+    {
+        return in_array($this->role, $roles, true);
+    }
+
     public function designs()
     {
         return $this->hasMany(Design::class);
