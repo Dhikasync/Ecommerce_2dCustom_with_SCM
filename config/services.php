@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    /*
+     * SI-02: sumber data lokasi dan tarif ongkir. Kunci hanya dipakai di
+     * server; versi API mengikuti dokumentasi RajaOngkir saat implementasi.
+     */
+    'rajaongkir' => [
+        'key' => env('RAJAONGKIR_API_KEY'),
+        'base_url' => env('RAJAONGKIR_BASE_URL', 'https://rajaongkir.komerce.id/api/v1'),
+    ],
+
 ];

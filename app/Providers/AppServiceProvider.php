@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\RajaOngkir;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -11,7 +12,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // SI-02: client dibuat per pemakaian dari kunci di .env, bukan dari
+        // argumen request, supaya kunci tidak pernah berpindah lewat input.
+        $this->app->bind(RajaOngkir::class, fn () => new RajaOngkir(
+            (string) config('services.rajaongkir.key'),
+            (string) config('services.rajaongkir.base_url'),
+        ));
     }
 
     /**
