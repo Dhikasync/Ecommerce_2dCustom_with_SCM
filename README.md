@@ -194,8 +194,9 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 
 ## Alur kerja Git
 
-- `main` selalu hijau; pekerjaan dilakukan di branch `feat/*`, lalu di-merge dengan `--no-ff`.
-- Satu branch per langkah: test ditulis dan di-commit di branch yang sama dengan kodenya. Tidak ada branch test terpisah supaya riwayat branch tetap sedikit dan mudah dibaca.
+- `main` selalu hijau; pekerjaan dilakukan di **branch fitur** bernama `<modul>/<fitur>` (misalnya `auth/login`, `profil/alamat`), lalu di-merge dengan `--no-ff`.
+- Satu branch per fitur, test ikut di dalamnya — tidak ada branch test terpisah.
+- Branch fitur **tidak dihapus** setelah di-merge, supaya riwayat per fitur tetap bisa dilihat.
 - Commit memakai Conventional Commits dan menyebut kode FR, misalnya `feat(auth): login ... (FR-AUTH-01, FR-AUTH-03)`.
 - Rilis ditandai tag annotated: `v0.1.0` (skema), `v0.2.0` (auth inti), `v0.3.0` (reset password + role).
 - `.env` dan `vendor/` tidak pernah di-commit.
