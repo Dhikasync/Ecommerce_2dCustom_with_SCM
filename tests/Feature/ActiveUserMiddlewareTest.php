@@ -50,7 +50,7 @@ class ActiveUserMiddlewareTest extends TestCase
 
         // Guard menyimpan user di memori selama satu proses test. Melupakannya
         // menyimulasikan request baru yang membaca ulang sesi dari database.
-        Auth::guard('web')->forgetUser();
+        Auth::forgetUser();
 
         $this->getJson('/uji-aktif')
             ->assertStatus(403)
