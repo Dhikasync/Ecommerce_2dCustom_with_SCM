@@ -40,6 +40,8 @@ class AuthController extends Controller
      */
     public function register(Request $request)
     {
+        $this->normalisasiEmail($request);
+
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
@@ -67,8 +69,11 @@ class AuthController extends Controller
     /**
      * FR-AUTH-06 #2-#4: verifikasi email lewat tautan bertanda tangan.
      *
-     * Urutan pemeriksaan: signature (middleware), user, hash email,
-     * status aktif, lalu token. Signature sudah diperiksa sebelum method ini.
+     * Urutan pemeriksaan: signature (middleware `signed`), user, hash email,
+     * lalu token. Signature sudah diperiksa sebelum method ini dijalankan.
+     *
+     * Status akun (is_aktif) sengaja tidak diperiksa di sini: verifikasi hanya
+     * menandai email, dan akun Nonaktif tetap ditolak saat login.
      */
     public function verify(Request $request, string $id, string $hash)
     {
@@ -87,7 +92,8 @@ class AuthController extends Controller
 
         $token = (string) $request->query('token', '');
 
-        if (! $user->email_verification_token || ! hash_equals($user->email_verification_token, $token)) {
+        // Yang tersimpan adalah hash SHA-256 token, bukan token aslinya.
+        if (! $user->email_verification_token || ! hash_equals($user->email_verification_token, hash('sha256', $token))) {
             return response()->json(['message' => 'Tautan verifikasi tidak valid'], 403);
         }
 
@@ -120,6 +126,8 @@ class AuthController extends Controller
      */
     public function resend(Request $request)
     {
+        $this->normalisasiEmail($request);
+
         $data = $request->validate([
             'email' => 'required|string|email|max:255',
         ]);
@@ -166,6 +174,8 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
+        $this->normalisasiEmail($request);
+
         $data = $request->validate([
             'email' => 'required|string|email|max:255',
             'password' => 'required|string',
@@ -222,7 +232,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Login berhasil',
             'user' => $user->only(['id', 'name', 'email', 'role']),
-            'redirect' => redirect()->intended(route('home'))->getTargetUrl(),
+            'redirect' => $this->tujuanSetelahLogin($request),
         ]);
     }
 
@@ -252,6 +262,8 @@ class AuthController extends Controller
      */
     public function forgotPassword(Request $request)
     {
+        $this->normalisasiEmail($request);
+
         $data = $request->validate([
             'email' => 'required|string|email|max:255',
         ]);
@@ -297,6 +309,8 @@ class AuthController extends Controller
      */
     public function resetPassword(Request $request)
     {
+        $this->normalisasiEmail($request);
+
         $data = $request->validate([
             'token' => 'required|string',
             'email' => 'required|string|email|max:255',
@@ -348,5 +362,41 @@ class AuthController extends Controller
             'message' => 'Password berhasil diubah, silakan login',
             'redirect' => url('/login'),
         ]);
+    }
+
+    /**
+     * Email tidak membedakan huruf besar/kecil, jadi input disamakan lebih
+     * dulu sebelum validasi. Tanpa ini, aturan `unique` dan pencarian
+     * `where('email', ...)` memakai bentuk berbeda dari yang disimpan model.
+     */
+    private function normalisasiEmail(Request $request): void
+    {
+        $email = $request->input('email');
+
+        if (is_string($email)) {
+            $request->merge(['email' => Str::lower(trim($email))]);
+        }
+    }
+
+    /**
+     * FR-AUTH-03 #2: kembali ke halaman yang diminta sebelum login.
+     *
+     * Nilai `url.intended` dibentuk dari URL request, termasuk header Host.
+     * Kalau host tujuannya berbeda dari APP_URL, permintaan diabaikan dan
+     * User diarahkan ke halaman utama, supaya login tidak bisa dipakai
+     * sebagai open redirect ke situs lain.
+     */
+    private function tujuanSetelahLogin(Request $request): string
+    {
+        $tujuan = (string) $request->session()->pull('url.intended', route('home'));
+
+        $hostTujuan = parse_url($tujuan, PHP_URL_HOST);
+        $hostAplikasi = parse_url((string) config('app.url'), PHP_URL_HOST);
+
+        if ($hostTujuan !== null && $hostAplikasi !== null && $hostTujuan !== $hostAplikasi) {
+            return route('home');
+        }
+
+        return $tujuan;
     }
 }

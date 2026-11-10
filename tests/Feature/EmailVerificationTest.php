@@ -11,20 +11,22 @@ class EmailVerificationTest extends TestCase
 {
     use RefreshDatabase;
 
+    private const TOKEN = 'abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz01';
+
     private function verificationUrl(User $user, ?string $token = null): string
     {
         return URL::temporarySignedRoute('verification.verify', now()->addMinutes(1440), [
             'id' => $user->id,
             'hash' => sha1($user->getEmailForVerification()),
-            'token' => $token ?? $user->email_verification_token,
+            'token' => $token ?? self::TOKEN,
         ]);
     }
 
-    private function unverifiedUser(string $token = 'abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz01'): User
+    private function unverifiedUser(): User
     {
         $user = User::factory()->unverified()->create();
 
-        $user->forceFill(['email_verification_token' => $token])->save();
+        $user->forceFill(['email_verification_token' => hash('sha256', self::TOKEN)])->save();
 
         return $user;
     }
@@ -44,6 +46,16 @@ class EmailVerificationTest extends TestCase
         $this->assertNull($user->email_verification_token);
     }
 
+    public function test_database_menyimpan_hash_bukan_token_asli(): void
+    {
+        $user = $this->unverifiedUser();
+
+        $this->assertSame(hash('sha256', self::TOKEN), $user->email_verification_token);
+        $this->assertNotSame(self::TOKEN, $user->email_verification_token);
+
+        $this->get($this->verificationUrl($user))->assertOk();
+    }
+
     public function test_tautan_kedaluwarsa_ditolak_dengan_pesan_khusus(): void
     {
         $user = $this->unverifiedUser();
@@ -51,7 +63,7 @@ class EmailVerificationTest extends TestCase
         $url = URL::temporarySignedRoute('verification.verify', now()->subMinute(), [
             'id' => $user->id,
             'hash' => sha1($user->getEmailForVerification()),
-            'token' => $user->email_verification_token,
+            'token' => self::TOKEN,
         ]);
 
         $response = $this->get($url);
@@ -99,7 +111,7 @@ class EmailVerificationTest extends TestCase
         $url = URL::temporarySignedRoute('verification.verify', now()->addMinutes(1440), [
             'id' => $user->id,
             'hash' => sha1('bukan-email-user@example.test'),
-            'token' => $user->email_verification_token,
+            'token' => self::TOKEN,
         ]);
 
         $response = $this->get($url);

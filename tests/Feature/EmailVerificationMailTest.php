@@ -26,12 +26,36 @@ class EmailVerificationMailTest extends TestCase
         $this->assertSame(64, strlen($user->email_verification_token));
 
         Mail::assertSent(VerifyEmailMail::class, function (VerifyEmailMail $mail) use ($user) {
-            $url = VerifyEmailMail::urlFor($mail->user);
+            $url = VerifyEmailMail::urlFor($mail->user, $mail->token);
 
-            return str_contains($url, 'token='.$user->email_verification_token)
+            // Token asli hanya ada di email; database menyimpan hash-nya.
+            return $mail->token !== $user->email_verification_token
+                && $user->email_verification_token === hash('sha256', $mail->token)
+                && str_contains($url, 'token='.$mail->token)
                 && str_contains($url, 'signature=')
                 && str_contains($url, 'expires=');
         });
+    }
+
+    public function test_tautan_dari_email_bisa_dipakai_verifikasi(): void
+    {
+        Mail::fake();
+
+        $user = User::factory()->unverified()->create();
+
+        $user->sendEmailVerificationNotification();
+
+        $url = '';
+
+        Mail::assertSent(VerifyEmailMail::class, function (VerifyEmailMail $mail) use (&$url) {
+            $url = VerifyEmailMail::urlFor($mail->user, $mail->token);
+
+            return true;
+        });
+
+        $this->get($url)->assertOk();
+
+        $this->assertNotNull($user->fresh()->email_verified_at);
     }
 
     public function test_kirim_ulang_membatalkan_tautan_sebelumnya(): void
@@ -40,17 +64,18 @@ class EmailVerificationMailTest extends TestCase
 
         $user = User::factory()->unverified()->create();
 
-        $user->forceFill(['email_verification_token' => str_repeat('a', 64)])->save();
+        $tokenLama = str_repeat('a', 64);
+        $user->forceFill(['email_verification_token' => hash('sha256', $tokenLama)])->save();
 
         $urlLama = URL::temporarySignedRoute('verification.verify', now()->addMinutes(1440), [
             'id' => $user->id,
             'hash' => sha1($user->getEmailForVerification()),
-            'token' => $user->email_verification_token,
+            'token' => $tokenLama,
         ]);
 
         $user->sendEmailVerificationNotification();
 
-        $this->assertNotSame(str_repeat('a', 64), $user->fresh()->email_verification_token);
+        $this->assertNotSame(hash('sha256', $tokenLama), $user->fresh()->email_verification_token);
 
         $this->get($urlLama)
             ->assertStatus(403)

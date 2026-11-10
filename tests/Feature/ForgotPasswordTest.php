@@ -62,6 +62,22 @@ class ForgotPasswordTest extends TestCase
         $this->assertSame($terdaftar, $tidak);
     }
 
+    public function test_email_huruf_besar_tetap_menemukan_akun(): void
+    {
+        Mail::fake();
+
+        User::factory()->create(['email' => 'budi@example.test']);
+
+        $this->postJson('/forgot-password', ['email' => 'BUDI@Example.Test'])
+            ->assertOk()
+            ->assertJson(['message' => self::PESAN_GENERIK]);
+
+        Mail::assertSent(
+            ResetPasswordMail::class,
+            fn (ResetPasswordMail $mail) => $mail->hasTo('budi@example.test'),
+        );
+    }
+
     public function test_email_wajib_valid(): void
     {
         Mail::fake();

@@ -140,6 +140,31 @@ class LoginTest extends TestCase
             ->assertJson(['redirect' => route('home')]);
     }
 
+    public function test_email_huruf_besar_tetap_bisa_login(): void
+    {
+        $this->user();
+
+        $this->postJson('/login', $this->payload(['email' => 'BUDI@Example.Test']))
+            ->assertOk()
+            ->assertJson(['message' => 'Login berhasil']);
+
+        $this->assertAuthenticated();
+    }
+
+    public function test_tujuan_login_ke_host_lain_diabaikan(): void
+    {
+        $this->user();
+
+        // url.intended dibentuk dari header Host, jadi host asing tidak boleh
+        // dipakai sebagai tujuan redirect setelah login.
+        $this->withSession(['url.intended' => 'https://situs-palsu.example/masuk'])
+            ->postJson('/login', $this->payload())
+            ->assertOk()
+            ->assertJson(['redirect' => route('home')]);
+
+        $this->assertAuthenticated();
+    }
+
     public function test_field_kosong_ditolak_dengan_pesan_wajib_diisi(): void
     {
         $this->postJson('/login', [])

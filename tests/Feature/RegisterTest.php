@@ -93,6 +93,30 @@ class RegisterTest extends TestCase
         $response->assertJsonValidationErrors(['email']);
     }
 
+    public function test_email_disimpan_dalam_huruf_kecil(): void
+    {
+        Mail::fake();
+
+        $this->postJson('/register', $this->payload(['email' => 'Budi@Example.Test']))
+            ->assertCreated()
+            ->assertJson(['email' => 'budi@example.test']);
+
+        $this->assertDatabaseHas('users', ['email' => 'budi@example.test']);
+    }
+
+    public function test_email_yang_berbeda_huruf_besar_kecil_dianggap_sama(): void
+    {
+        Mail::fake();
+
+        User::factory()->create(['email' => 'budi@example.test']);
+
+        $this->postJson('/register', $this->payload(['email' => 'BUDI@example.test']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['email']);
+
+        $this->assertSame(1, User::count());
+    }
+
     public function test_user_yang_sudah_login_diarahkan_ke_halaman_utama(): void
     {
         $user = User::factory()->create();

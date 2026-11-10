@@ -31,12 +31,12 @@ class ResendVerificationTest extends TestCase
         $user = User::factory()->unverified()->create([
             'email' => 'budi@example.test',
         ]);
-        $user->forceFill(['email_verification_token' => str_repeat('a', 64)])->save();
+        $user->forceFill(['email_verification_token' => hash('sha256', str_repeat('a', 64))])->save();
 
         $urlLama = URL::temporarySignedRoute('verification.verify', now()->addMinutes(1440), [
             'id' => $user->id,
             'hash' => sha1($user->getEmailForVerification()),
-            'token' => $user->email_verification_token,
+            'token' => str_repeat('a', 64),
         ]);
 
         $this->postJson('/email/verification-notification', ['email' => 'budi@example.test'])
@@ -45,7 +45,7 @@ class ResendVerificationTest extends TestCase
 
         Mail::assertSent(VerifyEmailMail::class);
 
-        $this->assertNotSame(str_repeat('a', 64), $user->fresh()->email_verification_token);
+        $this->assertNotSame(hash('sha256', str_repeat('a', 64)), $user->fresh()->email_verification_token);
 
         $this->get($urlLama)
             ->assertStatus(403)

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Mail\VerifyEmailMail;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Facades\Mail;
@@ -41,14 +42,32 @@ class User extends Authenticatable implements MustVerifyEmail
     ];
 
     /**
+     * Email selalu disimpan dalam huruf kecil. Alamat email tidak membedakan
+     * huruf besar/kecil, jadi tanpa ini "Budi@example.test" dan
+     * "budi@example.test" bisa lolos validasi unique lalu bentrok di database.
+     */
+    protected function email(): Attribute
+    {
+        return Attribute::make(
+            set: fn (string $value) => Str::lower(trim($value)),
+        );
+    }
+
+    /**
      * FR-AUTH-06 #5: setiap pengiriman membuat token baru, sehingga
      * tautan pada email sebelumnya tidak berlaku lagi.
+     *
+     * Yang disimpan hanya hash SHA-256 dari token. Kalau isi tabel bocor,
+     * token asli tidak bisa dipakai membajak verifikasi; token asli hanya
+     * ada di tautan yang dikirim ke email User.
      */
     public function sendEmailVerificationNotification()
     {
-        $this->forceFill(['email_verification_token' => Str::random(64)])->save();
+        $token = Str::random(64);
 
-        Mail::to($this->email)->send(new VerifyEmailMail($this));
+        $this->forceFill(['email_verification_token' => hash('sha256', $token)])->save();
+
+        Mail::to($this->email)->send(new VerifyEmailMail($this, $token));
     }
 
     /**
