@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Mail\ResetPasswordMail;
 use App\Models\User;
+use App\Rules\NomorTelepon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -45,7 +46,7 @@ class AuthController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
-            'no_hp' => 'nullable|string|max:20',
+            'no_hp' => ['nullable', new NomorTelepon],
             'password' => 'required|string|min:8|confirmed',
         ]);
 
