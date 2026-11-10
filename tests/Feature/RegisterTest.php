@@ -18,7 +18,7 @@ class RegisterTest extends TestCase
         return array_merge([
             'name' => 'Budi Santoso',
             'email' => 'budi@example.test',
-            'no_hp' => '08123456789',
+            'no_hp' => '+628123456789',
             'password' => 'rahasia123',
             'password_confirmation' => 'rahasia123',
         ], $override);
@@ -62,6 +62,31 @@ class RegisterTest extends TestCase
 
         $this->assertSame('user', $user->role);
         $this->assertTrue($user->is_aktif);
+    }
+
+    public function test_nomor_telepon_wajib_berawalan_plus_62_saat_registrasi(): void
+    {
+        Mail::fake();
+
+        // Aturan format yang sama dipakai di profil dan registrasi, supaya
+        // nomor yang tersimpan saat daftar tidak ditolak saat User menyimpan
+        // profilnya nanti.
+        $this->postJson('/register', $this->payload(['no_hp' => '08123456789']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['no_hp' => 'Format nomor telepon tidak valid']);
+
+        $this->assertSame(0, User::count());
+        Mail::assertNothingSent();
+    }
+
+    public function test_nomor_telepon_boleh_tidak_diisi_saat_registrasi(): void
+    {
+        Mail::fake();
+
+        $this->postJson('/register', $this->payload(['no_hp' => null]))
+            ->assertCreated();
+
+        $this->assertNull(User::firstOrFail()->no_hp);
     }
 
     public function test_registrasi_tidak_valid_ditolak_tanpa_membuat_akun(): void

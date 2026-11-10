@@ -9,6 +9,7 @@
  */
 
 use App\Http\Controllers\LokasiController;
+use App\Http\Controllers\ProfilController;
 use Illuminate\Support\Facades\Route;
 
 // Pencarian dipanggil saat User mengetik, jadi dibatasi per menit sebagai
@@ -18,3 +19,14 @@ use Illuminate\Support\Facades\Route;
 Route::get('/lokasi', [LokasiController::class, 'cari'])
     ->middleware(['auth', 'active', 'throttle:30,1'])
     ->name('lokasi.cari');
+
+// FR-PROF-01 #1: lihat profil sendiri. Tidak memakai `role:user` karena
+// Admin pun berhak melihat datanya sendiri; dashboard admin tetap terpisah.
+Route::get('/profil', [ProfilController::class, 'tampil'])
+    ->middleware(['auth', 'active'])
+    ->name('profil.tampil');
+
+// FR-PROF-01 #2, #3, #10: ubah nama dan nomor telepon.
+Route::put('/profil', [ProfilController::class, 'ubah'])
+    ->middleware(['auth', 'active'])
+    ->name('profil.ubah');

@@ -22,7 +22,7 @@ Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS 
 | Pesanan & pembayaran | FR-ORDR, FR-PAYM | ⏳ |
 | Desain kustom 2D | FR-DSN | ⏳ |
 | Rantai pasok (SCM) | FR-SCM | ⏳ |
-| Profil & alamat | FR-PROF | 🚧 pencarian lokasi (RajaOngkir) selesai; lihat/hapus/ubah profil dan alamat menyusul |
+| Profil & alamat | FR-PROF | 🚧 pencarian lokasi, lihat & ubah profil selesai; ganti password, alamat, dan ganti email menyusul |
 | Dashboard admin | FR-DASH | ⏳ ditunda sampai UI dimulai |
 
 Catatan jujur: login Admin sudah berjalan, tetapi **dashboard belum ada**; sementara Admin diarahkan ke halaman utama. Verifikasi email baru dari halaman profil (FR-AUTH-06 #7) menunggu modul profil.
@@ -103,7 +103,7 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **105 test lulus, 362 assertion** (dijalankan lokal dan otomatis di CI).
+Status terakhir: **132 test lulus, 448 assertion** (dijalankan lokal dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
@@ -142,7 +142,17 @@ Semua route dipisah per modul di `routes/*.php` dan memakai session guard. Respo
 | GET | `/reset-password/{token}` | `password.reset` | `guest` | Halaman password baru |
 | POST | `/reset-password` | `password.store` | `guest` | Simpan password baru (sekali pakai, 24 jam) |
 | GET | `/lokasi?search=` | `lokasi.cari` | `auth`, `active`, throttle 30/menit | FR-PROF-01 #4/#11/#12, UC-08 — cari kecamatan/kelurahan lewat RajaOngkir |
+| GET | `/profil` | `profil.tampil` | `auth`, `active` | FR-PROF-01 #1 — nama, email, nomor telepon, foto profil (jika ada) |
+| PUT | `/profil` | `profil.ubah` | `auth`, `active` | FR-PROF-01 #2/#3/#10 — ubah nama dan nomor telepon |
 | GET | `/products` | — | — | Scaffolding katalog, belum final |
+
+### Keputusan di luar dokumen
+
+SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat implementasi dan boleh berubah tanpa mengubah aturan bisnis:
+
+- **Format nomor telepon**: wajib diawali `+62` lalu 9–12 angka. Nomor gaya `08...` **ditolak**, bukan dinormalkan. Pesan errornya tetap kutipan dokumen, `"Format nomor telepon tidak valid"` (FR-PROF-01 #3). Aturan yang sama dipakai saat registrasi supaya nomor yang tersimpan tidak ditolak ketika User menyimpan profilnya.
+- **Foto profil**: hanya **ditampilkan** kalau kolomnya terisi (FR-PROF-01 #1). Tidak ada endpoint unggah karena dokumen tidak memuat skenario unggah; tidak ada upload untuk Admin juga.
+- **Batas waktu dan throttle RajaOngkir**: 8 detik (4 detik koneksi), 30 permintaan/menit untuk `/lokasi`.
 
 ## Aturan proyek yang tidak boleh dilanggar
 
