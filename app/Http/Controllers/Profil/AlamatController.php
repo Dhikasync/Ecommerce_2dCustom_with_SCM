@@ -1,9 +1,10 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Profil;
 
-use App\Models\Address;
+use App\Http\Controllers\Controller;
 use App\Models\Auth\User;
+use App\Models\Profil\Address;
 use App\Rules\NomorTelepon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

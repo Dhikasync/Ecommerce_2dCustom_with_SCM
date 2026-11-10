@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Auth\User;
+use App\Models\Profil\Address;
 use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model

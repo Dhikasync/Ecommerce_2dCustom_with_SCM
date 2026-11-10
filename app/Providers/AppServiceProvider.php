@@ -2,7 +2,7 @@
 
 namespace App\Providers;
 
-use App\Services\RajaOngkir;
+use App\Services\Profil\RajaOngkir;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider

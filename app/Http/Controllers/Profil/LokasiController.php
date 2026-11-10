@@ -1,9 +1,10 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Profil;
 
-use App\Exceptions\RajaOngkirException;
-use App\Services\RajaOngkir;
+use App\Exceptions\Profil\RajaOngkirException;
+use App\Http\Controllers\Controller;
+use App\Services\Profil\RajaOngkir;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

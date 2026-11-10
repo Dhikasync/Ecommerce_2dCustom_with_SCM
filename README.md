@@ -47,13 +47,16 @@ app/
 │   ├── Controllers/
 │   │   ├── Auth/
 │   │   │   └── AuthController.php       # registrasi, verifikasi, login, reset password, logout
-│   │   ├── LokasiController.php         # pencarian lokasi (RajaOngkir)
-│   │   ├── ProfilController.php         # lihat/ubah profil, ganti email, ubah password
-│   │   └── AlamatController.php         # kelola alamat + alamat utama
+│   │   └── Profil/
+│   │       ├── ProfilController.php     # lihat/ubah profil, ganti email, ubah password
+│   │       ├── AlamatController.php     # kelola alamat + alamat utama
+│   │       └── LokasiController.php     # pencarian lokasi (RajaOngkir)
 │   └── Middleware/
 │       └── Auth/
 │           ├── EnsureUserHasRole.php    # pembatasan akses per role (FR-AUTH-01 #7)
 │           └── EnsureUserIsActive.php   # akun Nonaktif ditolak (FR-AUTH-01 #6)
+├── Exceptions/
+│   └── Profil/RajaOngkirException.php   # kegagalan layanan pencarian lokasi
 ├── Mail/
 │   └── Auth/
 │       ├── VerifyEmailMail.php          # email verifikasi bertoken
@@ -61,10 +64,13 @@ app/
 │       ├── EmailChangeNoticeMail.php    # pemberitahuan ke email lama
 │       └── ResetPasswordMail.php        # email reset password bertoken
 ├── Rules/NomorTelepon.php               # format nomor telepon +62 (dipakai auth + profil)
-├── Services/RajaOngkir.php              # client pencarian lokasi
+├── Services/
+│   └── Profil/RajaOngkir.php            # client pencarian lokasi
 └── Models/
-    └── Auth/
-        └── User.php                     # model modul auth (27 model total sesuai skema SRS)
+    ├── Auth/
+    │   └── User.php                     # model modul auth (27 model total sesuai skema SRS)
+    └── Profil/
+        └── Address.php                  # alamat pengiriman user
 
 bootstrap/app.php                        # alias middleware + handler JSON untuk tautan kedaluwarsa
 database/factories/Auth/UserFactory.php  # factory mengikuti subfolder modelnya

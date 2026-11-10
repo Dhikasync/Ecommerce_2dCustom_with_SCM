@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Profil;
 
-use App\Exceptions\RajaOngkirException;
+use App\Exceptions\Profil\RajaOngkirException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;

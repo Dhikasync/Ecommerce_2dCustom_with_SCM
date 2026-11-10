@@ -8,9 +8,9 @@
  * jadi session dan CSRF tetap aktif seperti route di routes/auth.php.
  */
 
-use App\Http\Controllers\AlamatController;
-use App\Http\Controllers\LokasiController;
-use App\Http\Controllers\ProfilController;
+use App\Http\Controllers\Profil\AlamatController;
+use App\Http\Controllers\Profil\LokasiController;
+use App\Http\Controllers\Profil\ProfilController;
 use Illuminate\Support\Facades\Route;
 
 // Pencarian dipanggil saat User mengetik, jadi dibatasi per menit sebagai
