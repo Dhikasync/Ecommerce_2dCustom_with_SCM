@@ -52,6 +52,7 @@ class ProfilTest extends TestCase
                     'no_hp' => '+628123456789',
                     'foto_profil' => 'profil/budi.jpg',
                     'pending_email' => null,
+                    'alamat' => [],
                 ],
             ]);
     }
@@ -92,6 +93,7 @@ class ProfilTest extends TestCase
                     'no_hp' => '+628123456789',
                     'foto_profil' => null,
                     'pending_email' => null,
+                    'alamat' => [],
                 ],
             ]);
 

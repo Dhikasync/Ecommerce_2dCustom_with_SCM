@@ -250,6 +250,15 @@ class ProfilController extends Controller
             // sampai kolom ini diisi dari luar aplikasi.
             'foto_profil' => $user->foto_profil,
             'pending_email' => $user->pending_email,
+            // srs.md:375: membuka profil menampilkan nama, email, dan daftar
+            // alamat tersimpan. Utama lebih dulu supaya form checkout bisa
+            // langsung memakai alamat pertama.
+            'alamat' => $user->addresses()
+                ->orderByDesc('is_utama')
+                ->orderBy('id')
+                ->get()
+                ->map(fn ($item) => $item->ringkas())
+                ->all(),
         ];
     }
 }

@@ -8,6 +8,7 @@
  * jadi session dan CSRF tetap aktif seperti route di routes/auth.php.
  */
 
+use App\Http\Controllers\AlamatController;
 use App\Http\Controllers\LokasiController;
 use App\Http\Controllers\ProfilController;
 use Illuminate\Support\Facades\Route;
@@ -30,6 +31,30 @@ Route::get('/profil', [ProfilController::class, 'tampil'])
 Route::put('/profil', [ProfilController::class, 'ubah'])
     ->middleware(['auth', 'active'])
     ->name('profil.ubah');
+
+// FR-PROF-01 #4: alamat hanya tersimpan dengan lokasi hasil pencarian.
+Route::get('/profil/alamat', [AlamatController::class, 'daftar'])
+    ->middleware(['auth', 'active'])
+    ->name('alamat.index');
+
+Route::post('/profil/alamat', [AlamatController::class, 'simpan'])
+    ->middleware(['auth', 'active'])
+    ->name('alamat.store');
+
+// FR-PROF-01 #5: ubah alamat tersimpan.
+Route::put('/profil/alamat/{id}', [AlamatController::class, 'ubah'])
+    ->middleware(['auth', 'active'])
+    ->name('alamat.update');
+
+// FR-PROF-01 #6: hapus alamat (hanya kalau tersisa lebih dari satu).
+Route::delete('/profil/alamat/{id}', [AlamatController::class, 'hapus'])
+    ->middleware(['auth', 'active'])
+    ->name('alamat.destroy');
+
+// FR-PROF-01 #7: tandai alamat utama.
+Route::put('/profil/alamat/{id}/utama', [AlamatController::class, 'jadikanUtama'])
+    ->middleware(['auth', 'active'])
+    ->name('alamat.utama');
 
 // FR-PROF-01 #9: ubah password dari halaman profil. Throttle 6/menit untuk
 // membatasi tebakan password lama; angkanya pilihan teknis, bukan aturan
