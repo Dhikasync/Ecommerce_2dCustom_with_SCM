@@ -16,16 +16,16 @@ Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS 
 
 | Modul | Kode | Status |
 | --- | --- | --- |
-| Autentikasi | FR-AUTH | ✅ Login, registrasi, verifikasi email, reset password, logout, middleware role |
+| Autentikasi | FR-AUTH | ✅ lengkap: login Admin/User, registrasi, verifikasi email, ganti email dari profil, lupa/reset password, logout, middleware role |
 | Katalog produk | FR-KTLG | ⏳ berikutnya |
 | Keranjang & checkout | FR-CART | ⏳ |
 | Pesanan & pembayaran | FR-ORDR, FR-PAYM | ⏳ |
 | Desain kustom 2D | FR-DSN | ⏳ |
 | Rantai pasok (SCM) | FR-SCM | ⏳ |
-| Profil & alamat | FR-PROF | 🚧 pencarian lokasi, lihat & ubah profil selesai; ganti password, alamat, dan ganti email menyusul |
+| Profil & alamat | FR-PROF | 🚧 pencarian lokasi, lihat & ubah profil, dan ganti email selesai; ubah password serta alamat menyusul |
 | Dashboard admin | FR-DASH | ⏳ ditunda sampai UI dimulai |
 
-Catatan jujur: login Admin sudah berjalan, tetapi **dashboard belum ada**; sementara Admin diarahkan ke halaman utama. Verifikasi email baru dari halaman profil (FR-AUTH-06 #7) menunggu modul profil.
+Catatan jujur: login Admin sudah berjalan, tetapi **dashboard belum ada**; sementara Admin diarahkan ke halaman utama sesuai `user-story.md:19`. Modul profil masih berjalan — lihat baris FR-PROF.
 
 ## Tumpukan teknologi
 
@@ -44,17 +44,26 @@ Tanpa Breeze/Fortify/Jetstream — autentikasi ditulis manual.
 ```
 app/
 ├── Http/
-│   ├── Controllers/AuthController.php   # registrasi, verifikasi, login, reset password, logout
+│   ├── Controllers/
+│   │   ├── AuthController.php           # registrasi, verifikasi, login, reset password, logout
+│   │   ├── LokasiController.php         # pencarian lokasi (RajaOngkir)
+│   │   └── ProfilController.php         # lihat/ubah profil + ganti email
 │   └── Middleware/                       # EnsureUserHasRole (lintas role),
 │                                         # EnsureUserIsActive (akun Nonaktif)
 ├── Mail/
 │   ├── VerifyEmailMail.php              # email verifikasi bertoken
+│   ├── VerifyNewEmailMail.php           # tautan konfirmasi email baru (FR-AUTH-06 #7)
+│   ├── EmailChangeNoticeMail.php        # pemberitahuan ke email lama
 │   └── ResetPasswordMail.php            # email reset password bertoken
+├── Rules/NomorTelepon.php               # format nomor telepon +62
+├── Services/RajaOngkir.php              # client pencarian lokasi
 └── Models/                              # 27 model sesuai skema SRS
 
 bootstrap/app.php                        # alias middleware + handler JSON untuk tautan kedaluwarsa
 database/migrations/                     # 30 migrasi
-routes/web.php                           # seluruh route (session guard)
+routes/auth.php                          # login, registrasi, verifikasi, reset password
+routes/profil.php                        # profil, ganti email, pencarian lokasi
+routes/web.php                           # halaman utama
 tests/Feature/                           # pengujian perilaku per kebutuhan
 ```
 
@@ -103,7 +112,7 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **132 test lulus, 448 assertion** (dijalankan lokal dan otomatis di CI).
+Status terakhir: **152 test lulus, 559 assertion** (dijalankan lokal dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
@@ -144,6 +153,8 @@ Semua route dipisah per modul di `routes/*.php` dan memakai session guard. Respo
 | GET | `/lokasi?search=` | `lokasi.cari` | `auth`, `active`, throttle 30/menit | FR-PROF-01 #4/#11/#12, UC-08 — cari kecamatan/kelurahan lewat RajaOngkir |
 | GET | `/profil` | `profil.tampil` | `auth`, `active` | FR-PROF-01 #1 — nama, email, nomor telepon, foto profil (jika ada) |
 | PUT | `/profil` | `profil.ubah` | `auth`, `active` | FR-PROF-01 #2/#3/#10 — ubah nama dan nomor telepon |
+| PUT | `/profil/email` | `profil.email.ajukan` | `auth`, `active`, throttle 6/menit | FR-PROF-01 #8 — ajukan email baru; email lama tetap berlaku |
+| GET | `/profil/email/verify/{id}/{hash}` | `profil.email.verify` | `signed`, throttle 6/menit | FR-AUTH-06 #7 — konfirmasi email baru (tautan 24 jam, sekali pakai) |
 | GET | `/products` | — | — | Scaffolding katalog, belum final |
 
 ### Keputusan di luar dokumen
@@ -152,6 +163,10 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 
 - **Format nomor telepon**: wajib diawali `+62` lalu 9–12 angka. Nomor gaya `08...` **ditolak**, bukan dinormalkan. Pesan errornya tetap kutipan dokumen, `"Format nomor telepon tidak valid"` (FR-PROF-01 #3). Aturan yang sama dipakai saat registrasi supaya nomor yang tersimpan tidak ditolak ketika User menyimpan profilnya.
 - **Foto profil**: hanya **ditampilkan** kalau kolomnya terisi (FR-PROF-01 #1). Tidak ada endpoint unggah karena dokumen tidak memuat skenario unggah; tidak ada upload untuk Admin juga.
+- **Ganti email bertahap**: email baru disimpan di kolom `pending_email` + `pending_email_token` (hash SHA-256), bukan langsung menimpa `email`. Alasannya aturan dokumen itu sendiri: "email lama tetap berlaku sampai verifikasi selesai" (FR-AUTH-06 #7), dan kolom tambahan adalah satu-satunya cara menyimpan alamat baru tanpa membuatnya aktif lebih dulu.
+- **Masa berlaku tautan konfirmasi email**: 24 jam, memakai `config('auth.verification.expire')` yang sama dengan tautan verifikasi registrasi — tidak ada angka baru.
+- **Konfirmasi email tanpa login**: endpoint konfirmasi tidak memakai middleware `auth`, karena tautan dibuka dari aplikasi email yang belum tentu berada di browser dengan sesi aktif. Pengamanannya tanda tangan URL (24 jam) + token sekali pakai, sama seperti verifikasi registrasi.
+- **Tidak ada konfirmasi password saat ganti email**: skenario FR-PROF-01 #8 hanya menyebut submit email baru. Pengaman yang dipakai adalah pemberitahuan ke email lama (FR-AUTH-06 #7).
 - **Batas waktu dan throttle RajaOngkir**: 8 detik (4 detik koneksi), 30 permintaan/menit untuk `/lokasi`.
 
 ## Aturan proyek yang tidak boleh dilanggar
