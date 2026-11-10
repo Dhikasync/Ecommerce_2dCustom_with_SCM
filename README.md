@@ -22,7 +22,7 @@ Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS 
 | Pesanan & pembayaran | FR-ORDR, FR-PAYM | ⏳ |
 | Desain kustom 2D | FR-DSN | ⏳ |
 | Rantai pasok (SCM) | FR-SCM | ⏳ |
-| Profil & alamat | FR-PROF | ⏳ |
+| Profil & alamat | FR-PROF | 🚧 pencarian lokasi (RajaOngkir) selesai; lihat/hapus/ubah profil dan alamat menyusul |
 | Dashboard admin | FR-DASH | ⏳ ditunda sampai UI dimulai |
 
 Catatan jujur: login Admin sudah berjalan, tetapi **dashboard belum ada**; sementara Admin diarahkan ke halaman utama. Verifikasi email baru dari halaman profil (FR-AUTH-06 #7) menunggu modul profil.
@@ -103,7 +103,7 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **94 test lulus, 334 assertion** (dijalankan lokal dan otomatis di CI).
+Status terakhir: **105 test lulus, 362 assertion** (dijalankan lokal dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
@@ -141,6 +141,7 @@ Semua route dipisah per modul di `routes/*.php` dan memakai session guard. Respo
 | POST | `/forgot-password` | `password.email` | `guest`, throttle 6/menit | FR-AUTH-04 |
 | GET | `/reset-password/{token}` | `password.reset` | `guest` | Halaman password baru |
 | POST | `/reset-password` | `password.store` | `guest` | Simpan password baru (sekali pakai, 24 jam) |
+| GET | `/lokasi?search=` | `lokasi.cari` | `auth`, `active`, throttle 30/menit | FR-PROF-01 #4/#11/#12, UC-08 — cari kecamatan/kelurahan lewat RajaOngkir |
 | GET | `/products` | — | — | Scaffolding katalog, belum final |
 
 ## Aturan proyek yang tidak boleh dilanggar

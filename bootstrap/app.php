@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // sini karena group itu hanya otomatis untuk routes/web.php.
         then: function () {
             Route::middleware('web')->group(base_path('routes/auth.php'));
+            Route::middleware('web')->group(base_path('routes/profil.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
