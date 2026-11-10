@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
+use App\Models\Auth\User;
 use App\Rules\NomorTelepon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Mail\VerifyEmailMail;
-use App\Models\User;
+use App\Mail\Auth\VerifyEmailMail;
+use App\Models\Auth\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;

@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Mail\EmailChangeNoticeMail;
-use App\Mail\VerifyNewEmailMail;
-use App\Models\User;
+use App\Mail\Auth\EmailChangeNoticeMail;
+use App\Mail\Auth\VerifyNewEmailMail;
+use App\Models\Auth\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;

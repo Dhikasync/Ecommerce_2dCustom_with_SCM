@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Auth\User;
 use Illuminate\Database\Eloquent\Model;
 
 class DesignRevision extends Model
 {
     /**
-     * FR-CDSN-05 #5: riwayat validasi desain — tanggal, versi, status,
+     * FR-CDSN-05 #5: riwayat validasi desain â€” tanggal, versi, status,
      * dan catatan revisi. Satu baris per pengajuan/revisi.
      */
     protected $fillable = [

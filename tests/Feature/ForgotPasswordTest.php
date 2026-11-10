@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Mail\ResetPasswordMail;
-use App\Models\User;
+use App\Mail\Auth\ResetPasswordMail;
+use App\Models\Auth\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;

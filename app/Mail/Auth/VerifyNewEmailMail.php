@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Mail;
+namespace App\Mail\Auth;
 
-use App\Models\User;
+use App\Models\Auth\User;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
