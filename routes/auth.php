@@ -8,7 +8,7 @@
  * jadi session dan CSRF tetap aktif seperti route di routes/web.php.
  */
 
-use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verify'])

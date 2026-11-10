@@ -1,9 +1,10 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Auth;
 
-use App\Mail\ResetPasswordMail;
-use App\Models\User;
+use App\Http\Controllers\Controller;
+use App\Mail\Auth\ResetPasswordMail;
+use App\Models\Auth\User;
 use App\Rules\NomorTelepon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

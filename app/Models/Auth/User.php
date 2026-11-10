@@ -1,11 +1,20 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\Auth;
 
-use App\Mail\EmailChangeNoticeMail;
-use App\Mail\VerifyEmailMail;
-use App\Mail\VerifyNewEmailMail;
-use Database\Factories\UserFactory;
+use App\Mail\Auth\EmailChangeNoticeMail;
+use App\Mail\Auth\VerifyEmailMail;
+use App\Mail\Auth\VerifyNewEmailMail;
+use App\Models\Address;
+use App\Models\AuditLog;
+use App\Models\CancellationRequest;
+use App\Models\Cart;
+use App\Models\Design;
+use App\Models\DesignRevision;
+use App\Models\Notification;
+use App\Models\Order;
+use App\Models\Review;
+use Database\Factories\Auth\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;

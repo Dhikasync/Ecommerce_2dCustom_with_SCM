@@ -45,28 +45,37 @@ Tanpa Breeze/Fortify/Jetstream — autentikasi ditulis manual.
 app/
 ├── Http/
 │   ├── Controllers/
-│   │   ├── AuthController.php           # registrasi, verifikasi, login, reset password, logout
+│   │   ├── Auth/
+│   │   │   └── AuthController.php       # registrasi, verifikasi, login, reset password, logout
 │   │   ├── LokasiController.php         # pencarian lokasi (RajaOngkir)
 │   │   ├── ProfilController.php         # lihat/ubah profil, ganti email, ubah password
 │   │   └── AlamatController.php         # kelola alamat + alamat utama
-│   └── Middleware/                       # EnsureUserHasRole (lintas role),
-│                                         # EnsureUserIsActive (akun Nonaktif)
+│   └── Middleware/
+│       └── Auth/
+│           ├── EnsureUserHasRole.php    # pembatasan akses per role (FR-AUTH-01 #7)
+│           └── EnsureUserIsActive.php   # akun Nonaktif ditolak (FR-AUTH-01 #6)
 ├── Mail/
-│   ├── VerifyEmailMail.php              # email verifikasi bertoken
-│   ├── VerifyNewEmailMail.php           # tautan konfirmasi email baru (FR-AUTH-06 #7)
-│   ├── EmailChangeNoticeMail.php        # pemberitahuan ke email lama
-│   └── ResetPasswordMail.php            # email reset password bertoken
-├── Rules/NomorTelepon.php               # format nomor telepon +62
+│   └── Auth/
+│       ├── VerifyEmailMail.php          # email verifikasi bertoken
+│       ├── VerifyNewEmailMail.php       # tautan konfirmasi email baru (FR-AUTH-06 #7)
+│       ├── EmailChangeNoticeMail.php    # pemberitahuan ke email lama
+│       └── ResetPasswordMail.php        # email reset password bertoken
+├── Rules/NomorTelepon.php               # format nomor telepon +62 (dipakai auth + profil)
 ├── Services/RajaOngkir.php              # client pencarian lokasi
-└── Models/                              # 27 model sesuai skema SRS
+└── Models/
+    └── Auth/
+        └── User.php                     # model modul auth (27 model total sesuai skema SRS)
 
 bootstrap/app.php                        # alias middleware + handler JSON untuk tautan kedaluwarsa
-database/migrations/                     # 30 migrasi
+database/factories/Auth/UserFactory.php  # factory mengikuti subfolder modelnya
+database/migrations/                     # 31 migrasi (tetap flat)
 routes/auth.php                          # login, registrasi, verifikasi, reset password
 routes/profil.php                        # profil, ganti email, pencarian lokasi
 routes/web.php                           # halaman utama
 tests/Feature/                           # pengujian perilaku per kebutuhan
 ```
+
+Aturan penataan: file dikelompokkan per modul SRS ke **subfolder di dalam folder Laravel yang sudah ada** (`Controllers/Auth`, `Models/Auth`, `Mail/Auth`, `Middleware/Auth`, `database/factories/Auth`) - tidak ada folder top-level baru. Migrasi sengaja **tetap flat** di `database/migrations/` dan nama filenya tidak pernah diubah, karena tabel `migrations` mencatat nama file yang sudah dijalankan; mengubah nama/timestamp membuat migrasi lama dianggap belum jalan.
 
 ## Menjalankan di lokal
 
