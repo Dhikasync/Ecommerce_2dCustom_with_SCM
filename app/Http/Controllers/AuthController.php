@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\ResetPasswordMail;
 use App\Models\User;
 use App\Rules\NomorTelepon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -36,6 +37,25 @@ class AuthController extends Controller
     private const HASH_PALSU = '$2y$12$Zcb8I3ItxN3/X42kvYN/2uryGwYsvm2zEmfKBecaTDYhAjOlghQ0i';
 
     /**
+     * FR-AUTH-06 #5/#6: kirim ulang tautan verifikasi dibatasi 5 permintaan
+     * per 15 menit untuk kombinasi email + IP.
+     */
+    private const BATAS_KIRIM_ULANG = 5;
+
+    /**
+     * Bentuk email yang diterima harus sama di semua endpoint. Kalau aturan ini
+     * ditulis berulang, cepat atau lambat satu endpoint akan tertinggal saat
+     * aturannya diubah.
+     */
+    private const ATURAN_EMAIL = 'required|string|email|max:255';
+
+    private const PESAN_TERLALU_BANYAK = 'Terlalu banyak permintaan, coba lagi beberapa saat lagi';
+
+    private const PESAN_TAUTAN_VERIFIKASI_TIDAK_VALID = 'Tautan verifikasi tidak valid';
+
+    private const PESAN_TAUTAN_RESET_TIDAK_VALID = 'Link reset tidak valid atau sudah dipakai';
+
+    /**
      * FR-AUTH-02 #1: membuat akun "Belum Diverifikasi", mengirim email
      * verifikasi, dan TIDAK melakukan login otomatis.
      */
@@ -45,7 +65,7 @@ class AuthController extends Controller
 
         $data = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
+            'email' => self::ATURAN_EMAIL.'|unique:users',
             'no_hp' => ['nullable', new NomorTelepon],
             'password' => 'required|string|min:8|confirmed',
         ]);
@@ -81,21 +101,18 @@ class AuthController extends Controller
         $user = User::find($id);
 
         if (! $user || ! hash_equals(sha1($user->getEmailForVerification()), $hash)) {
-            return response()->json(['message' => 'Tautan verifikasi tidak valid'], 403);
+            return $this->tautanVerifikasiTidakValid();
         }
 
         if ($user->hasVerifiedEmail()) {
-            return response()->json([
-                'message' => 'Email sudah diverifikasi, silakan login',
-                'redirect' => url('/login'),
-            ]);
+            return $this->keLogin('Email sudah diverifikasi, silakan login');
         }
 
         $token = (string) $request->query('token', '');
 
         // Yang tersimpan adalah hash SHA-256 token, bukan token aslinya.
         if (! $user->email_verification_token || ! hash_equals($user->email_verification_token, hash('sha256', $token))) {
-            return response()->json(['message' => 'Tautan verifikasi tidak valid'], 403);
+            return $this->tautanVerifikasiTidakValid();
         }
 
         $user->forceFill([
@@ -103,10 +120,7 @@ class AuthController extends Controller
             'email_verification_token' => null,
         ])->save();
 
-        return response()->json([
-            'message' => 'Email berhasil diverifikasi, silakan login',
-            'redirect' => url('/login'),
-        ]);
+        return $this->keLogin('Email berhasil diverifikasi, silakan login');
     }
 
     /**
@@ -130,18 +144,17 @@ class AuthController extends Controller
         $this->normalisasiEmail($request);
 
         $data = $request->validate([
-            'email' => 'required|string|email|max:255',
+            'email' => self::ATURAN_EMAIL,
         ]);
 
-        $key = 'kirim-verifikasi:'.Str::lower($data['email']).'|'.$request->ip();
+        // Email sudah dinormalkan di atas, jadi tidak perlu di-lower lagi.
+        $key = 'kirim-verifikasi:'.$data['email'].'|'.$request->ip();
 
-        if (RateLimiter::tooManyAttempts($key, 5)) {
-            return response()->json([
-                'message' => 'Terlalu banyak permintaan, coba lagi beberapa saat lagi',
-            ], 429);
+        if (RateLimiter::tooManyAttempts($key, self::BATAS_KIRIM_ULANG)) {
+            return $this->terlaluBanyak();
         }
 
-        RateLimiter::hit($key, 15 * 60);
+        RateLimiter::hit($key, self::JENDELA_KUNCI_DETIK);
 
         $user = User::where('email', $data['email'])->first();
 
@@ -178,21 +191,19 @@ class AuthController extends Controller
         $this->normalisasiEmail($request);
 
         $data = $request->validate([
-            'email' => 'required|string|email|max:255',
+            'email' => self::ATURAN_EMAIL,
             'password' => 'required|string',
         ], [
             'email.required' => 'Email dan password wajib diisi',
             'password.required' => 'Email dan password wajib diisi',
         ]);
 
-        $kunciAkun = 'login-akun:'.Str::lower($data['email']);
+        $kunciAkun = 'login-akun:'.$data['email'];
         $kunciIp = 'login-ip:'.$request->ip();
 
         if (RateLimiter::tooManyAttempts($kunciAkun, self::BATAS_GAGAL_PER_AKUN)
             || RateLimiter::tooManyAttempts($kunciIp, self::BATAS_GAGAL_PER_IP)) {
-            return response()->json([
-                'message' => 'Terlalu banyak permintaan, coba lagi beberapa saat lagi',
-            ], 429);
+            return $this->terlaluBanyak();
         }
 
         $user = User::where('email', $data['email'])->first();
@@ -266,7 +277,7 @@ class AuthController extends Controller
         $this->normalisasiEmail($request);
 
         $data = $request->validate([
-            'email' => 'required|string|email|max:255',
+            'email' => self::ATURAN_EMAIL,
         ]);
 
         $user = User::where('email', $data['email'])->first();
@@ -314,7 +325,7 @@ class AuthController extends Controller
 
         $data = $request->validate([
             'token' => 'required|string',
-            'email' => 'required|string|email|max:255',
+            'email' => self::ATURAN_EMAIL,
             'password' => 'required|string|min:8|confirmed',
         ], [
             'password.required' => 'Password baru wajib diisi',
@@ -326,9 +337,7 @@ class AuthController extends Controller
         $record = DB::table($tabel)->where('email', $data['email'])->first();
 
         if (! $record) {
-            return response()->json([
-                'message' => 'Link reset tidak valid atau sudah dipakai',
-            ], 422);
+            return $this->tautanResetTidakValid();
         }
 
         $kedaluwarsa = Carbon::parse($record->created_at)
@@ -354,13 +363,46 @@ class AuthController extends Controller
         );
 
         if ($status !== Password::PASSWORD_RESET) {
-            return response()->json([
-                'message' => 'Link reset tidak valid atau sudah dipakai',
-            ], 422);
+            return $this->tautanResetTidakValid();
         }
 
+        return $this->keLogin('Password berhasil diubah, silakan login');
+    }
+
+    /**
+     * Satu bentuk balasan untuk semua pembatas percobaan, supaya status dan
+     * pesan 429 tidak pernah berbeda antar endpoint.
+     */
+    private function terlaluBanyak(): JsonResponse
+    {
+        return response()->json(['message' => self::PESAN_TERLALU_BANYAK], 429);
+    }
+
+    /**
+     * Tautan verifikasi ditolak di dua tempat: saat hash email tidak cocok dan
+     * saat token tidak cocok. Keduanya harus dijawab sama persis.
+     */
+    private function tautanVerifikasiTidakValid(): JsonResponse
+    {
+        return response()->json(['message' => self::PESAN_TAUTAN_VERIFIKASI_TIDAK_VALID], 403);
+    }
+
+    /**
+     * Tautan reset yang tidak dikenal dan yang sudah dipakai dijawab sama,
+     * supaya penebak tidak tahu apakah tokennya pernah ada.
+     */
+    private function tautanResetTidakValid(): JsonResponse
+    {
+        return response()->json(['message' => self::PESAN_TAUTAN_RESET_TIDAK_VALID], 422);
+    }
+
+    /**
+     * Balasan berhasil yang mengarahkan User ke halaman login.
+     */
+    private function keLogin(string $pesan): JsonResponse
+    {
         return response()->json([
-            'message' => 'Password berhasil diubah, silakan login',
+            'message' => $pesan,
             'redirect' => url('/login'),
         ]);
     }
