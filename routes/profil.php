@@ -31,6 +31,13 @@ Route::put('/profil', [ProfilController::class, 'ubah'])
     ->middleware(['auth', 'active'])
     ->name('profil.ubah');
 
+// FR-PROF-01 #9: ubah password dari halaman profil. Throttle 6/menit untuk
+// membatasi tebakan password lama; angkanya pilihan teknis, bukan aturan
+// dokumen.
+Route::put('/profil/password', [ProfilController::class, 'ubahPassword'])
+    ->middleware(['auth', 'active', 'throttle:6,1'])
+    ->name('profil.password.ubah');
+
 // FR-PROF-01 #8: ajukan perubahan email. Throttle 6/menit karena endpoint
 // ini mengirim dua email; angkanya pilihan teknis, bukan aturan dokumen.
 Route::put('/profil/email', [ProfilController::class, 'ajukanEmail'])

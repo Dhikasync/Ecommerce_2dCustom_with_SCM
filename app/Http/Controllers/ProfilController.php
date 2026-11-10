@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Rules\NomorTelepon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -89,6 +90,55 @@ class ProfilController extends Controller
         return response()->json([
             'message' => 'Profil berhasil diperbarui',
             'data' => $this->dataProfil($user->refresh()),
+        ]);
+    }
+
+    /**
+     * FR-PROF-01 #9: ubah password dari halaman profil.
+     *
+     * Password lama wajib dibuktikan lebih dulu: tanpa itu, siapa pun yang
+     * memegang sesi User bisa mengunci pemilik akun di luar.
+     *
+     * Sesi lain ikut terputus tanpa kode tambahan. `AuthenticateSession`
+     * menyimpan salinan hash password di setiap sesi, jadi setelah hash di
+     * database berubah, sesi lain tidak lagi cocok. Sesi yang sedang dipakai
+     * aman karena middleware yang sama menulis ulang salinannya di akhir
+     * request.
+     */
+    public function ubahPassword(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'password_lama' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ], [
+            // Pesan yang belum diatur dokumen, disetujui pemilik proyek.
+            'password_lama.required' => 'Password lama wajib diisi',
+            // Sama dengan pesan di FR-AUTH-04 #5 dan reset password.
+            'password.required' => 'Password baru wajib diisi',
+            'password.min' => 'Password minimal 8 karakter',
+            // Sama dengan pesan di FR-AUTH-02 #3.
+            'password.confirmed' => 'Konfirmasi password tidak sesuai',
+        ]);
+
+        $user = $request->user();
+
+        if (! Hash::check($data['password_lama'], $user->getAuthPassword())) {
+            throw ValidationException::withMessages([
+                'password_lama' => 'Password lama tidak sesuai',
+            ]);
+        }
+
+        // Password dikirim apa adanya: cast `hashed` di model yang meng-hash
+        // sekali (NFR-SEC-01). `Hash::make` di sini akan membuat hash kedua.
+        // `remember_token` diganti supaya cookie "ingat saya" di perangkat
+        // lain tidak bisa dipakai lagi.
+        $user->forceFill([
+            'password' => $data['password'],
+            'remember_token' => Str::random(60),
+        ])->save();
+
+        return response()->json([
+            'message' => 'Password berhasil diubah',
         ]);
     }
 
