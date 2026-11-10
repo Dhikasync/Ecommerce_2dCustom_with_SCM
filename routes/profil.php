@@ -2,7 +2,7 @@
 
 /**
  * Modul 4.2 Profil dan Alamat (PROF) — srs.md:365
- * FR-PROF-01 #4 (pencarian lokasi), FR-PROF-01 #11/#12, UC-08.
+ * FR-PROF-01 #4, #8, #11/#12, UC-06, UC-08, plus FR-AUTH-06 #7.
  *
  * File ini dimuat dari bootstrap/app.php di dalam middleware group `web`,
  * jadi session dan CSRF tetap aktif seperti route di routes/auth.php.
@@ -30,3 +30,16 @@ Route::get('/profil', [ProfilController::class, 'tampil'])
 Route::put('/profil', [ProfilController::class, 'ubah'])
     ->middleware(['auth', 'active'])
     ->name('profil.ubah');
+
+// FR-PROF-01 #8: ajukan perubahan email. Throttle 6/menit karena endpoint
+// ini mengirim dua email; angkanya pilihan teknis, bukan aturan dokumen.
+Route::put('/profil/email', [ProfilController::class, 'ajukanEmail'])
+    ->middleware(['auth', 'active', 'throttle:6,1'])
+    ->name('profil.email.ajukan');
+
+// FR-AUTH-06 #7: konfirmasi dari tautan yang dikirim ke email baru.
+// Tanpa `auth` karena tautan dibuka dari aplikasi email, belum tentu di
+// browser yang punya sesi. Keamanan dari `signed` (24 jam) + hash token.
+Route::get('/profil/email/verify/{id}/{hash}', [ProfilController::class, 'konfirmasiEmail'])
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('profil.email.verify');

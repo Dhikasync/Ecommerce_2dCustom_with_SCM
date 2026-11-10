@@ -51,6 +51,7 @@ class ProfilTest extends TestCase
                     'email' => 'budi@example.test',
                     'no_hp' => '+628123456789',
                     'foto_profil' => 'profil/budi.jpg',
+                    'pending_email' => null,
                 ],
             ]);
     }
@@ -90,6 +91,7 @@ class ProfilTest extends TestCase
                     'email' => $user->email,
                     'no_hp' => '+628123456789',
                     'foto_profil' => null,
+                    'pending_email' => null,
                 ],
             ]);
 
