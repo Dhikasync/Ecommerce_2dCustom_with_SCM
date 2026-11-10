@@ -30,7 +30,7 @@ class ResetPasswordTest extends TestCase
             'password' => 'passwordLama123',
         ]);
 
-        $token = Password::broker()->createToken($user);
+        $token = Password::createToken($user);
 
         $this->postJson('/reset-password', $this->payload($user, $token))
             ->assertOk()
@@ -50,7 +50,7 @@ class ResetPasswordTest extends TestCase
     public function test_token_hanya_bisa_dipakai_sekali(): void
     {
         $user = User::factory()->create(['email' => 'budi@example.test']);
-        $token = Password::broker()->createToken($user);
+        $token = Password::createToken($user);
 
         $this->postJson('/reset-password', $this->payload($user, $token))
             ->assertOk();
@@ -69,7 +69,7 @@ class ResetPasswordTest extends TestCase
             'password' => 'passwordLama123',
         ]);
 
-        Password::broker()->createToken($user);
+        Password::createToken($user);
 
         $this->postJson('/reset-password', $this->payload($user, 'token-palsu'))
             ->assertStatus(422)
@@ -85,7 +85,7 @@ class ResetPasswordTest extends TestCase
             'password' => 'passwordLama123',
         ]);
 
-        $token = Password::broker()->createToken($user);
+        $token = Password::createToken($user);
 
         DB::table('password_reset_tokens')
             ->where('email', $user->email)
@@ -106,7 +106,7 @@ class ResetPasswordTest extends TestCase
             'remember_token' => 'token-lama',
         ]);
 
-        $token = Password::broker()->createToken($user);
+        $token = Password::createToken($user);
 
         $this->postJson('/reset-password', $this->payload($user, $token))
             ->assertOk();
@@ -117,7 +117,7 @@ class ResetPasswordTest extends TestCase
     public function test_password_kurang_dari_delapan_karakter_ditolak(): void
     {
         $user = User::factory()->create(['email' => 'budi@example.test']);
-        $token = Password::broker()->createToken($user);
+        $token = Password::createToken($user);
 
         $this->postJson('/reset-password', $this->payload($user, $token, [
             'password' => 'pendek',
@@ -133,7 +133,7 @@ class ResetPasswordTest extends TestCase
     public function test_konfirmasi_password_tidak_cocok_ditolak(): void
     {
         $user = User::factory()->create(['email' => 'budi@example.test']);
-        $token = Password::broker()->createToken($user);
+        $token = Password::createToken($user);
 
         $this->postJson('/reset-password', $this->payload($user, $token, [
             'password_confirmation' => 'beda12345',
@@ -150,7 +150,7 @@ class ResetPasswordTest extends TestCase
             'password' => 'passwordLama123',
         ]);
 
-        $token = Password::broker()->createToken($user);
+        $token = Password::createToken($user);
 
         $this->postJson('/reset-password', $this->payload($user, $token))->assertOk();
 

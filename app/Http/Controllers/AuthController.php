@@ -262,7 +262,7 @@ class AuthController extends Controller
             // Token dibuat dan email dikirim setelah respons terkirim, supaya
             // email terdaftar tidak lebih lambat dari email tak terdaftar.
             defer(function () use ($user) {
-                $token = Password::broker()->createToken($user);
+                $token = Password::createToken($user);
 
                 Mail::to($user->email)->send(new ResetPasswordMail($user, $token));
             });

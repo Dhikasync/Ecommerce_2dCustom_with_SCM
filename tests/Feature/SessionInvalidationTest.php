@@ -44,7 +44,7 @@ class SessionInvalidationTest extends TestCase
         session()->flush();
 
         // Sesi B (guest): password diubah lewat tautan reset.
-        $token = Password::broker()->createToken($user);
+        $token = Password::createToken($user);
 
         $this->postJson('/reset-password', [
             'token' => $token,
