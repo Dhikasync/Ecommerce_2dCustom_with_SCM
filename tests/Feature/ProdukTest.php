@@ -416,6 +416,46 @@ class ProdukTest extends TestCase
         $this->assertDatabaseHas('products', ['id' => $produk->id]);
     }
 
+    public function test_produk_dengan_varian_berstok_tidak_bisa_dihapus(): void
+    {
+        $produk = Product::create($this->dataProduk());
+        $produk->variants()->create([
+            'sku' => 'TAS-1',
+            'harga' => 150000,
+            'berat' => 500,
+            'moq' => 1,
+            'stok_fisik' => 5,
+        ]);
+
+        $this->actingAs($this->adminEcommerce())
+            ->deleteJson('/admin/produk/'.$produk->id)
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Produk masih memiliki stok pada salah satu varian, kosongkan stok terlebih dahulu');
+
+        $this->assertDatabaseHas('products', ['id' => $produk->id]);
+        $this->assertDatabaseHas('variants', ['product_id' => $produk->id, 'stok_fisik' => 5]);
+    }
+
+    public function test_produk_dengan_stok_reservasi_tidak_bisa_dihapus(): void
+    {
+        $produk = Product::create($this->dataProduk());
+        $produk->variants()->create([
+            'sku' => 'TAS-1',
+            'harga' => 150000,
+            'berat' => 500,
+            'moq' => 1,
+            'stok_direservasi' => 2,
+        ]);
+
+        $this->actingAs($this->adminEcommerce())
+            ->deleteJson('/admin/produk/'.$produk->id)
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Produk masih memiliki stok pada salah satu varian, kosongkan stok terlebih dahulu');
+
+        $this->assertDatabaseHas('products', ['id' => $produk->id]);
+        $this->assertDatabaseHas('variants', ['product_id' => $produk->id, 'stok_direservasi' => 2]);
+    }
+
     public function test_produk_dengan_pesanan_selesai_boleh_dihapus_dan_riwayat_tetap_utuh(): void
     {
         $produk = Product::create($this->dataProduk());

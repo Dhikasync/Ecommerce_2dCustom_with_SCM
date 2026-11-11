@@ -40,6 +40,8 @@ class ProductController extends Controller
 
     private const PESAN_PESANAN_AKTIF = 'Produk masih memiliki pesanan aktif dan tidak dapat dihapus';
 
+    private const PESAN_STOK_MASIH_ADA = 'Produk masih memiliki stok pada salah satu varian, kosongkan stok terlebih dahulu';
+
     /**
      * Pesanan berstatus ini dianggap selesai, sehingga produknya boleh
      * dihapus (FR-PROD-01 #5). Status lain berarti pesanan masih berjalan.
@@ -121,6 +123,13 @@ class ProductController extends Controller
      *
      * Produk yang masih dipakai pesanan berjalan ditolak: menghapusnya akan
      * melepas tautan varian dari pesanan yang belum selesai.
+     *
+     * Produk yang variannya masih berstok juga ditolak. `variants.product_id`
+     * dan `stock_movements.variant_id` sama-sama memakai ON DELETE CASCADE,
+     * jadi menghapus produk berstok akan membuang angka stok beserta seluruh
+     * kartu stoknya — padahal stok adalah wilayah Admin SCM. Aturan ini
+     * menyamakan penjagaan di VariantController::hapus supaya produk tidak
+     * bisa dipakai sebagai jalan pintas untuk melewatinya.
      */
     public function hapus(int $id): JsonResponse
     {
@@ -128,6 +137,16 @@ class ProductController extends Controller
 
         if (! $produk) {
             return $this->tidakDitemukan();
+        }
+
+        $masihBerstok = $produk->variants()
+            ->where(fn ($query) => $query
+                ->where('stok_fisik', '>', 0)
+                ->orWhere('stok_direservasi', '>', 0))
+            ->exists();
+
+        if ($masihBerstok) {
+            return response()->json(['message' => self::PESAN_STOK_MASIH_ADA], 422);
         }
 
         $varianIds = $produk->variants()->pluck('id');
