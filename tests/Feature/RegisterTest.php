@@ -100,10 +100,28 @@ class RegisterTest extends TestCase
         ]);
 
         $response->assertStatus(422);
-        $response->assertJsonValidationErrors(['name', 'email', 'password']);
+        // Pesan dikunci persis: User Story FR-AUTH-02 #3/#4 dan pola
+        // "Nama wajib diisi" dari FR-PROF-01 #10.
+        $response->assertJsonPath('errors.name.0', 'Nama wajib diisi');
+        $response->assertJsonPath('errors.email.0', 'Format email tidak valid');
+        $response->assertJsonPath('errors.password.0', 'Konfirmasi password tidak sesuai');
 
         $this->assertSame(0, User::count());
         Mail::assertNothingSent();
+    }
+
+    public function test_password_kurang_dari_delapan_karakter_ditolak_dengan_pesan_dokumen(): void
+    {
+        Mail::fake();
+
+        $this->postJson('/register', $this->payload([
+            'password' => 'rahasia',
+            'password_confirmation' => 'rahasia',
+        ]))
+            ->assertStatus(422)
+            ->assertJsonPath('errors.password.0', 'Password minimal 8 karakter');
+
+        $this->assertSame(0, User::count());
     }
 
     public function test_dua_akun_dengan_email_sama_ditolak(): void
@@ -115,7 +133,7 @@ class RegisterTest extends TestCase
         $response = $this->postJson('/register', $this->payload());
 
         $response->assertStatus(422);
-        $response->assertJsonValidationErrors(['email']);
+        $response->assertJsonPath('errors.email.0', 'Email sudah digunakan');
     }
 
     public function test_email_disimpan_dalam_huruf_kecil(): void

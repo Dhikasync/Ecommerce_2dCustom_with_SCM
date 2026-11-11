@@ -205,12 +205,16 @@ class ProdukTest extends TestCase
     {
         Storage::fake('public');
 
-        $this->actingAs($this->adminEcommerce())
+        $response = $this->actingAs($this->adminEcommerce())
             ->post('/admin/produk', array_merge($this->dataProduk(), [
                 'gambar' => [UploadedFile::fake()->create('dokumen.pdf', 10, 'application/pdf')],
-            ]))
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('gambar.0');
+            ]));
+
+        $response->assertStatus(422);
+
+        // Pesan dibaca dari larik `errors`, bukan dot-path: kunci validasinya
+        // bertitik (`gambar.0`) sehingga dot-path akan salah pecah.
+        $this->assertSame('Format gambar harus JPG atau PNG', $response->json('errors')['gambar.0'][0]);
 
         $this->assertSame(0, Product::count());
     }
@@ -219,12 +223,16 @@ class ProdukTest extends TestCase
     {
         Storage::fake('public');
 
-        $this->actingAs($this->adminEcommerce())
+        $berkas = $this->gambar('besar.jpg', 2049);
+
+        $response = $this->actingAs($this->adminEcommerce())
             ->post('/admin/produk', array_merge($this->dataProduk(), [
-                'gambar' => [$this->gambar('besar.jpg', 2049)],
-            ]))
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('gambar.0');
+                'gambar' => [$berkas],
+            ]));
+
+        $response->assertStatus(422);
+
+        $this->assertSame('Ukuran gambar maksimal 2 MB', $response->json('errors')['gambar.0'][0]);
 
         $this->assertSame(0, Product::count());
     }
