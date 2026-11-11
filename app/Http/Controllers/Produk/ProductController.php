@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Produk;
 use App\Http\Controllers\Controller;
 use App\Models\OrderItem;
 use App\Models\Produk\Product;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -315,7 +316,19 @@ class ProductController extends Controller
 
     private function urlGambar(?string $path): ?string
     {
-        return $path === null ? null : Storage::disk(self::DISK)->url($path);
+        if ($path === null) {
+            return null;
+        }
+
+        // Facade Storage hanya menjanjikan kontrak `Filesystem`, sedangkan
+        // `url()` didefinisikan di kontrak `Cloud` dan di FilesystemAdapter
+        // yang dipakai disk `public`. Anotasi ini memberi tahu alat analisis
+        // statis (Intelephense/PHPStan) kelas konkret yang sebenarnya dipakai,
+        // tanpa mengubah perilaku saat berjalan.
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk(self::DISK);
+
+        return $disk->url($path);
     }
 
     /**
