@@ -3,6 +3,7 @@
 namespace App\Models\Profil;
 
 use App\Models\Auth\User;
+use App\Models\Order;
 use Illuminate\Database\Eloquent\Model;
 
 class Address extends Model
@@ -33,6 +34,9 @@ class Address extends Model
 
     public function orders()
     {
+        // `Order` ada di App\Models, sedangkan model ini di App\Models\Profil.
+        // Tanpa import di atas, PHP membaca `Order::class` sebagai
+        // App\Models\Profil\Order dan relasinya gagal saat dipakai.
         return $this->hasMany(Order::class);
     }
 

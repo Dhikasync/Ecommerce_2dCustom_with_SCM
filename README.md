@@ -137,7 +137,7 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **261 test lulus, 907 assertion** (dijalankan lokal dan otomatis di CI).
+Status terakhir: **262 test lulus, 910 assertion** (dijalankan lokal dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
