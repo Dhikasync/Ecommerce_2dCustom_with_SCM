@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Auth\User;
+use App\Models\Order;
 use App\Models\Profil\Address;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -371,5 +372,39 @@ class AlamatTest extends TestCase
             ->assertJsonPath('data.is_utama', false);
 
         $this->assertTrue($utama->fresh()->is_utama);
+    }
+
+    /**
+     * Relasi `Address::orders()` dipakai untuk menahan hapus alamat yang
+     * masih dipakai pesanan berjalan (FR-PROF-01 #6). Karena model ini
+     * berada di namespace App\Models\Profil, `Order::class` tanpa import
+     * akan menunjuk App\Models\Profil\Order dan relasinya gagal.
+     */
+    public function test_relasi_alamat_ke_pesanan_menunjuk_model_dan_kolom_yang_benar(): void
+    {
+        $user = $this->pengguna();
+
+        $alamat = Address::create($this->payload() + ['user_id' => $user->getKey(), 'is_utama' => true]);
+
+        $pesanan = Order::create([
+            'user_id' => $user->getKey(),
+            'address_id' => $alamat->getKey(),
+            'nomor_pesanan' => 'INV-ALAMAT-1',
+            'status' => 'menunggu_pembayaran',
+            'subtotal_barang' => 150000,
+            'ongkir' => 0,
+            'diskon_voucher' => 0,
+            'total' => 150000,
+            'nama_penerima' => 'Budi Santoso',
+            'no_hp' => '+628123456789',
+            'alamat_pengiriman' => 'Jl. Airlangga No. 10',
+            'label_lokasi' => 'AIRLANGGA, GUBENG, SURABAYA, JAWA TIMUR, 60286',
+        ]);
+
+        $relasi = $alamat->orders();
+
+        $this->assertSame(Order::class, $relasi->getRelated()::class);
+        $this->assertSame('address_id', $relasi->getForeignKeyName());
+        $this->assertSame([$pesanan->getKey()], $alamat->orders()->pluck('id')->all());
     }
 }
