@@ -17,6 +17,7 @@ Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS 
 | Modul | Kode | Status |
 | --- | --- | --- |
 | Autentikasi | FR-AUTH | ✅ lengkap: login Admin/User, registrasi, verifikasi email, ganti email dari profil, lupa/reset password, logout, middleware role |
+| Produk (admin) | FR-PROD | 🟡 FR-PROD-02 selesai (kelola kategori, unik tanpa beda huruf); FR-PROD-01 (produk/gambar) dan FR-PROD-03 (MOQ) menyusul |
 | Katalog produk | FR-KTLG | ⏳ berikutnya |
 | Keranjang & checkout | FR-CART | ⏳ |
 | Pesanan & pembayaran | FR-ORDR, FR-PAYM | ⏳ |
@@ -82,6 +83,7 @@ database/factories/Auth/UserFactory.php  # factory mengikuti subfolder modelnya
 database/migrations/                     # 31 migrasi (tetap flat)
 routes/auth.php                          # login, registrasi, verifikasi, reset password
 routes/profil.php                        # profil, ganti email, pencarian lokasi
+routes/produk.php                        # kelola kategori (FR-PROD-02)
 routes/web.php                           # halaman utama
 tests/Feature/                           # pengujian perilaku per kebutuhan
 ```
@@ -133,7 +135,7 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **188 test lulus, 671 assertion** (dijalankan lokal dan otomatis di CI).
+Status terakhir: **206 test lulus, 716 assertion** (dijalankan lokal dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
@@ -183,6 +185,10 @@ Semua route dipisah per modul di `routes/*.php` dan memakai session guard. Respo
 | PUT | `/profil/email` | `profil.email.ajukan` | `auth`, `active`, throttle 6/menit | FR-PROF-01 #8 — ajukan email baru; email lama tetap berlaku |
 | GET | `/profil/email/verify/{id}/{hash}` | `profil.email.verify` | `signed`, throttle 6/menit | FR-AUTH-06 #7 — konfirmasi email baru (tautan 24 jam, sekali pakai) |
 | GET | `/products` | — | — | Scaffolding katalog, belum final |
+| GET | `/admin/kategori` | `kategori.index` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - daftar kategori urut nama |
+| POST | `/admin/kategori` | `kategori.store` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - tambah kategori (nama unik tanpa beda huruf) |
+| PUT | `/admin/kategori/{id}` | `kategori.update` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - ubah nama/deskripsi |
+| DELETE | `/admin/kategori/{id}` | `kategori.destroy` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - hapus; ditolak kalau masih dipakai produk |
 
 ### Keputusan di luar dokumen
 
@@ -201,6 +207,9 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Pesan validasi alamat**: dokumen hanya menetapkan pesan format nomor telepon. Pesan `"Nama penerima wajib diisi"`, `"Nomor telepon wajib diisi"`, `"Alamat lengkap wajib diisi"`, dan `"Lokasi wajib dipilih"` mengikuti pola `"Nama wajib diisi"` (#10).
 - **Alamat milik User lain dijawab `404`** (`"Alamat tidak ditemukan"`), bukan `403`, supaya keberadaan alamat orang lain tidak terbuka (NFR-SEC-03).
 - **Batas waktu dan throttle RajaOngkir**: 8 detik (4 detik koneksi), 30 permintaan/menit untuk `/lokasi`.
+- **Arti "nama kategori unik" (FR-PROD-02)**: dokumen tidak menyebut huruf besar/kecil, jadi `Tas` dan `tas` dianggap sama. Ditegakkan dua lapis: indeks `categories_nama_lower_unique` (ekspresi `lower(nama)`) dan pemeriksaan di `KategoriController` supaya muncul pesan `"Kategori sudah ada"` seperti `srs.md:406`, bukan error 500 dari database.
+- **Prefiks rute admin**: endpoint kelola kategori memakai `/admin/...` supaya terpisah dari katalog publik yang nanti memakai `/katalog` (FR-KTLG). Dokumen tidak mengatur bentuk URL.
+- **Pesan `"Kategori tidak ditemukan"`**: dokumen hanya menetapkan pesan duplikat dan pesan kategori terpakai (`srs.md:406-407`); pesan untuk id yang tidak ada mengikuti pola `"Alamat tidak ditemukan"` dan dijawab `404`.
 
 ## Aturan proyek yang tidak boleh dilanggar
 
