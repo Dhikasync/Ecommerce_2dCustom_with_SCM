@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\Address;
 use App\Models\Auth\User;
+use App\Models\Profil\Address;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Exceptions\RajaOngkirException;
-use App\Services\RajaOngkir;
+use App\Exceptions\Profil\RajaOngkirException;
+use App\Services\Profil\RajaOngkir;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
