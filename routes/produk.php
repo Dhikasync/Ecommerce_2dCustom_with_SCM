@@ -2,8 +2,8 @@
 
 /**
  * Modul 4.3 Produk (PROD) - srs.md:398
- * Saat ini baru FR-PROD-02 (kelola kategori). FR-PROD-01 (produk) dan
- * FR-PROD-03 (MOQ) menyusul di file yang sama.
+ * FR-PROD-02 (kelola kategori) dan FR-PROD-01 (kelola produk + gambar).
+ * FR-PROD-03 (MOQ per varian) menyusul di file yang sama.
  *
  * srs.md:398: hanya Admin Ecommerce yang mengelola produk, kategori, dan MOQ.
  * Pembatasan itu ditegakkan di sisi server (NFR-SEC-03) lewat middleware
@@ -16,6 +16,7 @@
  */
 
 use App\Http\Controllers\Produk\KategoriController;
+use App\Http\Controllers\Produk\ProductController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'active', 'role:admin_ecommerce'])
@@ -33,4 +34,23 @@ Route::middleware(['auth', 'active', 'role:admin_ecommerce'])
 
         Route::delete('/kategori/{id}', [KategoriController::class, 'hapus'])
             ->name('kategori.destroy');
+
+        // FR-PROD-01: daftar, tambah, ubah, hapus produk.
+        // Unggah gambar memakai multipart/form-data; Laravel membaca
+        // `_method=PUT` saat form HTML mengirim ubah produk.
+        Route::get('/produk', [ProductController::class, 'daftar'])
+            ->name('produk.index');
+
+        Route::post('/produk', [ProductController::class, 'simpan'])
+            ->name('produk.store');
+
+        Route::put('/produk/{id}', [ProductController::class, 'ubah'])
+            ->name('produk.update');
+
+        Route::delete('/produk/{id}', [ProductController::class, 'hapus'])
+            ->name('produk.destroy');
+
+        // Hapus satu foto galeri. Foto utama diganti lewat ubah produk.
+        Route::delete('/produk/{id}/gambar/{gambarId}', [ProductController::class, 'hapusGambar'])
+            ->name('produk.gambar.destroy');
     });

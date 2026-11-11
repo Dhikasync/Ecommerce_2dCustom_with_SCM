@@ -2,6 +2,12 @@
 
 namespace App\Models\Produk;
 
+use App\Models\CartItem;
+use App\Models\Design;
+use App\Models\Distributor;
+use App\Models\OrderItem;
+use App\Models\PurchaseOrderItem;
+use App\Models\StockMovement;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 
