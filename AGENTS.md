@@ -50,6 +50,12 @@ integration and 2D custom design. Laravel (PHP 8.5), PostgreSQL (nichibag_db).
 
 - Build locally first, push to `main` when a step is verified. Never force
   push. Never commit `.env` or `vendor/`.
+- One active branch per piece of work, named `<type>/<short-summary>` where
+  type is a Conventional Commits type: `feat`, `fix`, `refactor`, `perf`,
+  `docs`, `chore`, `test` (e.g. `feat/kelola-produk`,
+  `fix/relasi-order-alamat`, `docs/alur-git`). No module-prefixed branch
+  names. Merge with `--no-ff`, then delete the branch (local and remote)
+  immediately — the merge commit already preserves the history.
 - Every push and PR to `main` runs `.github/workflows/tests.yml` (Pint +
   PHPUnit on PostgreSQL). A step is not done until that run is green.
 
