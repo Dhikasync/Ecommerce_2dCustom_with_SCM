@@ -17,7 +17,7 @@ Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS 
 | Modul | Kode | Status |
 | --- | --- | --- |
 | Autentikasi | FR-AUTH | ✅ lengkap: login Admin/User, registrasi, verifikasi email, ganti email dari profil, lupa/reset password, logout, middleware role |
-| Produk (admin) | FR-PROD | 🟡 FR-PROD-01 (produk + gambar) dan FR-PROD-02 (kategori) selesai; FR-PROD-03 (MOQ per varian) dan pengelolaan varian menyusul |
+| Produk (admin) | FR-PROD | ✅ sisi admin: produk + gambar, varian (SKU/harga/berat/MOQ), kategori. Penegakan MOQ saat tambah ke keranjang menyusul di modul CART (FR-PROD-03 #2/#3) |
 | Katalog produk | FR-KTLG | ⏳ berikutnya |
 | Keranjang & checkout | FR-CART | ⏳ |
 | Pesanan & pembayaran | FR-ORDR, FR-PAYM | ⏳ |
@@ -83,7 +83,7 @@ database/factories/Auth/UserFactory.php  # factory mengikuti subfolder modelnya
 database/migrations/                     # 31 migrasi (tetap flat)
 routes/auth.php                          # login, registrasi, verifikasi, reset password
 routes/profil.php                        # profil, ganti email, pencarian lokasi
-routes/produk.php                        # kelola kategori dan produk (FR-PROD-01/02)
+routes/produk.php                        # kelola kategori, produk, dan varian (FR-PROD-01/02/03)
 routes/web.php                           # halaman utama
 tests/Feature/                           # pengujian perilaku per kebutuhan
 ```
@@ -136,7 +136,7 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **229 test lulus, 812 assertion** (dijalankan lokal dan otomatis di CI).
+Status terakhir: **256 test lulus, 893 assertion** (dijalankan lokal dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
@@ -195,6 +195,10 @@ Semua route dipisah per modul di `routes/*.php` dan memakai session guard. Respo
 | PUT | `/admin/produk/{id}` | `produk.update` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-01 #4/#6 — ubah produk, ganti foto utama, ubah status Aktif/Nonaktif |
 | DELETE | `/admin/produk/{id}` | `produk.destroy` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-01 #5 — hapus; ditolak kalau masih ada pesanan aktif |
 | DELETE | `/admin/produk/{id}/gambar/{gambarId}` | `produk.gambar.destroy` | `auth`, `active`, `role:admin_ecommerce` | Hapus satu foto galeri (foto utama diganti lewat ubah produk) |
+| GET | `/admin/produk/{id}/varian` | `varian.index` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-01 #3 — daftar varian + Stok Tersedia hasil hitung |
+| POST | `/admin/produk/{id}/varian` | `varian.store` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-01 #3/#8 — tambah varian berstok 0; SKU duplikat ditolak |
+| PUT | `/admin/produk/{id}/varian/{varianId}` | `varian.update` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-01 #3 + FR-PROD-03 #1 — ubah varian/MOQ; stok tidak ikut berubah |
+| DELETE | `/admin/produk/{id}/varian/{varianId}` | `varian.destroy` | `auth`, `active`, `role:admin_ecommerce` | Hapus varian; ditolak kalau masih berstok atau punya pesanan aktif |
 
 ### Keputusan di luar dokumen
 
@@ -217,6 +221,11 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Gambar tidak ditautkan ke varian**: tabel `product_images` hanya punya `product_id`, jadi "banyak foto per warna" belum bisa diwakili tanpa migrasi baru. Tautan per-varian diputuskan saat modul katalog/desain dibangun.
 - **Arti "pesanan aktif" pada hapus produk (FR-PROD-01 #5)**: semua status selain `selesai` dan `dibatalkan` (sesuai enum `orders.status`). Pesan `"Produk masih memiliki pesanan aktif dan tidak dapat dihapus"` tidak ditetapkan dokumen. Riwayat pesanan tetap utuh karena `order_items` menyimpan salinan nama produk/SKU/harga dan `variant_id` menjadi `null` saat varian ikut terhapus.
 - **Simpan gambar**: disk `public` di `storage/app/public/produk`, sehingga `php artisan storage:link` wajib dijalankan sekali per mesin.
+- **SKU unik tanpa beda huruf (FR-PROD-01 #8)**: `TAS-1` dan `tas-1` dianggap kode yang sama dan ditolak dengan `"Kode SKU sudah digunakan"` (user-story:223). Seperti nama kategori, aturan ini hidup di `VariantController` (`lower(sku)`), bukan lewat indeks tambahan; unique bawaan kolom `sku` tetap menolak kode yang persis sama. Konsekuensi yang diterima: jalur tulis di luar controller bisa menyisipkan SKU yang hanya beda huruf.
+- **MOQ tidak diisi berarti 1**: dokumen hanya mewajibkan MOQ disimpan per varian (FR-PROD-03 #1). Nilai 1 adalah batas terkecil yang diizinkan `variants_moq_check`.
+- **Angka stok diabaikan di endpoint varian**: `stok_fisik`, `stok_direservasi`, dan `stok_minimum` tidak dibaca dari request, bahkan kalau dikirim, karena hanya Admin SCM yang boleh mengubah stok (srs.md:398). `stok_tersedia` selalu dihitung dan tidak pernah disimpan.
+- **Notifikasi varian baru**: satu baris `notifications` per Admin SCM aktif, `tipe = "stok_awal"`, dibuat saat varian baru disimpan (user-story:218, FR-SCM-01 #6). Judul dan isi pesan tidak ditetapkan dokumen. Kalau belum ada Admin SCM, varian tetap tersimpan tanpa notifikasi.
+- **Penjagaan hapus varian**: ditolak `422` jika `stok_fisik` atau `stok_direservasi` masih lebih dari 0 (menghapusnya akan membuang riwayat `stock_movements` lewat cascade), atau jika varian dipakai pesanan berjalan. Kedua pesannya tidak ditetapkan dokumen.
 - **Batas waktu dan throttle RajaOngkir**: 8 detik (4 detik koneksi), 30 permintaan/menit untuk `/lokasi`.
 - **Arti "nama kategori unik" (FR-PROD-02)**: dokumen tidak menyebut huruf besar/kecil, jadi `Tas` dan `tas` dianggap sama. Aturan ini ditegakkan **di `KategoriController`** (`lower(nama)` + `whereKeyNot`), bukan dengan indeks tambahan di database — database hanya menolak nama yang persis sama lewat unique bawaan kolom `nama`. Konsekuensi yang diterima: jalur tulis di luar controller (seeder, SQL manual, atau dua permintaan yang benar-benar bersamaan) masih bisa menyisipkan `Tas` dan `tas` berdampingan.
 - **Prefiks rute admin**: endpoint kelola kategori memakai `/admin/...` supaya terpisah dari katalog publik yang nanti memakai `/katalog` (FR-KTLG). Dokumen tidak mengatur bentuk URL.

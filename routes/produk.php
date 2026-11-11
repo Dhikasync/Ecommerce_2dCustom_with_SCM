@@ -2,8 +2,9 @@
 
 /**
  * Modul 4.3 Produk (PROD) - srs.md:398
- * FR-PROD-02 (kelola kategori) dan FR-PROD-01 (kelola produk + gambar).
- * FR-PROD-03 (MOQ per varian) menyusul di file yang sama.
+ * FR-PROD-01 (produk + gambar + varian), FR-PROD-02 (kelola kategori), dan
+ * FR-PROD-03 #1 (MOQ per varian). Penegakan MOQ saat keranjang menyusul di
+ * modul CART (FR-PROD-03 #2/#3).
  *
  * srs.md:398: hanya Admin Ecommerce yang mengelola produk, kategori, dan MOQ.
  * Pembatasan itu ditegakkan di sisi server (NFR-SEC-03) lewat middleware
@@ -17,6 +18,7 @@
 
 use App\Http\Controllers\Produk\KategoriController;
 use App\Http\Controllers\Produk\ProductController;
+use App\Http\Controllers\Produk\VariantController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'active', 'role:admin_ecommerce'])
@@ -53,4 +55,19 @@ Route::middleware(['auth', 'active', 'role:admin_ecommerce'])
         // Hapus satu foto galeri. Foto utama diganti lewat ubah produk.
         Route::delete('/produk/{id}/gambar/{gambarId}', [ProductController::class, 'hapusGambar'])
             ->name('produk.gambar.destroy');
+
+        // FR-PROD-01 #3/#8 dan FR-PROD-03 #1: varian (SKU), harga, berat,
+        // dan MOQ. Varian selalu beralamat di bawah produknya supaya id
+        // varian milik produk lain tidak bisa disentuh dari produk ini.
+        Route::get('/produk/{id}/varian', [VariantController::class, 'daftar'])
+            ->name('varian.index');
+
+        Route::post('/produk/{id}/varian', [VariantController::class, 'simpan'])
+            ->name('varian.store');
+
+        Route::put('/produk/{id}/varian/{varianId}', [VariantController::class, 'ubah'])
+            ->name('varian.update');
+
+        Route::delete('/produk/{id}/varian/{varianId}', [VariantController::class, 'hapus'])
+            ->name('varian.destroy');
     });
