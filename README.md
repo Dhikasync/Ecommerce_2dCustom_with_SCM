@@ -69,6 +69,11 @@ app/
 └── Models/
     ├── Auth/
     │   └── User.php                     # model modul auth (27 model total sesuai skema SRS)
+    ├── Produk/
+    │   ├── Category.php                 # kategori produk (hapus = restrict)
+    │   ├── Product.php                  # produk
+    │   ├── ProductImage.php             # gambar produk (urut tampil)
+    │   └── Variant.php                  # varian/SKU: stok_fisik + stok_direservasi
     └── Profil/
         └── Address.php                  # alamat pengiriman user
 

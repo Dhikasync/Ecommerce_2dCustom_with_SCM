@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Produk\Variant;
 use Illuminate\Database\Eloquent\Model;
 
 class Distributor extends Model

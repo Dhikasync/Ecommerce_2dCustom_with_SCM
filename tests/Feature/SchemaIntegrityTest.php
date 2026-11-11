@@ -3,17 +3,17 @@
 namespace Tests\Feature;
 
 use App\Models\Auth\User;
-use App\Models\Category;
 use App\Models\Design;
 use App\Models\Distributor;
 use App\Models\Order;
 use App\Models\Payment;
-use App\Models\Product;
-use App\Models\ProductImage;
+use App\Models\Produk\Category;
+use App\Models\Produk\Product;
+use App\Models\Produk\ProductImage;
+use App\Models\Produk\Variant;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\Template;
-use App\Models\Variant;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;

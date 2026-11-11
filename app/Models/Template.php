@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Produk\Product;
 use Illuminate\Database\Eloquent\Model;
 
 class Template extends Model
