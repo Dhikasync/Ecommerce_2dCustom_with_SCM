@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\Auth\User;
 use App\Models\Produk\Category;
 use App\Models\Produk\Product;
-use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -94,16 +93,6 @@ class KategoriTest extends TestCase
             ->assertJsonPath('message', 'Kategori sudah ada');
 
         $this->assertSame(1, Category::count());
-    }
-
-    public function test_indeks_database_menolak_nama_kembar_beda_huruf(): void
-    {
-        Category::create(['nama' => 'Tas']);
-
-        // Insert ini tidak melewati KategoriController, jadi yang diuji adalah
-        // indeks `categories_nama_lower_unique` di database.
-        $this->expectException(QueryException::class);
-        Category::create(['nama' => 'tas']);
     }
 
     public function test_nama_hanya_spasi_ditolak(): void

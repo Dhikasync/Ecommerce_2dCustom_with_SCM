@@ -17,10 +17,11 @@ use Illuminate\Validation\ValidationException;
  * middleware `role` di routes/produk.php, bukan di controller ini.
  *
  * Nama kategori unik tanpa membedakan huruf besar/kecil. Itu keputusan di
- * luar dokumen (dicatat di README): dokumen hanya menulis "nama unik", dan
- * tafsiran itu ditegakkan dua lapis — indeks `categories_nama_lower_unique`
- * di database, plus pemeriksaan di sini supaya pesan "Kategori sudah ada"
- * (srs.md:406) muncul sebagai pesan validasi, bukan error 500 dari database.
+ * luar dokumen (dicatat di README): dokumen hanya menulis "nama unik". Aturan
+ * ini ditegakkan di sini, bukan lewat indeks tambahan di database, sehingga
+ * pesan "Kategori sudah ada" (srs.md:406) muncul sebagai pesan validasi.
+ * Unique bawaan kolom `nama` tetap menjadi penjaga terakhir untuk nama yang
+ * persis sama.
  *
  * Kategori yang masih dipakai produk tidak boleh dihapus (srs.md:407).
  * Pemeriksaan di controller memberi pesan yang ditetapkan dokumen; FK
@@ -125,7 +126,7 @@ class KategoriController extends Controller
             'deskripsi' => ['nullable', 'string'],
         ]);
 
-        // `lower(nama)` dipakai supaya sejalan dengan indeks unik di database.
+        // Dibandingkan dalam huruf kecil supaya `Tas` dan `tas` dianggap sama.
         $duplikat = Category::query()
             ->whereRaw('lower(nama) = ?', [Str::lower($data['nama'])])
             ->when($kategori, fn ($query) => $query->whereKeyNot($kategori->getKey()))
