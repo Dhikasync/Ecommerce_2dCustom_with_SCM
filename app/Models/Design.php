@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Auth\User;
+use App\Models\Produk\Variant;
 use Illuminate\Database\Eloquent\Model;
 
 class Design extends Model
