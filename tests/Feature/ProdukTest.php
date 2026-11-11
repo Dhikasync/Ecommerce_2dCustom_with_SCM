@@ -299,6 +299,74 @@ class ProdukTest extends TestCase
         $this->assertDatabaseHas('products', ['id' => $produk->id, 'is_aktif' => false]);
     }
 
+    public function test_produk_custom_yang_sudah_aktif_tetap_aktif_saat_diubah(): void
+    {
+        // Custom aktif hanya mungkin setelah template dan SLA ada; constraint
+        // `products_custom_aktif_check` menolak custom aktif tanpa sla_hari.
+        $produk = Product::create($this->dataProduk([
+            'tipe' => 'custom',
+            'is_aktif' => true,
+            'sla_hari' => 7,
+        ]));
+
+        $this->actingAs($this->adminEcommerce())
+            ->putJson('/admin/produk/'.$produk->id, [
+                'category_id' => $produk->category_id,
+                'nama' => 'Tas Rotan Custom Baru',
+                'deskripsi' => 'Deskripsi baru',
+                'tipe' => 'custom',
+                'harga_dasar' => 150000,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.nama', 'Tas Rotan Custom Baru')
+            ->assertJsonPath('data.is_aktif', true);
+
+        $this->assertDatabaseHas('products', ['id' => $produk->id, 'is_aktif' => true]);
+    }
+
+    public function test_produk_jadi_yang_diubah_menjadi_custom_tetap_nonaktif(): void
+    {
+        $produk = Product::create($this->dataProduk());
+
+        $this->actingAs($this->adminEcommerce())
+            ->putJson('/admin/produk/'.$produk->id, [
+                'category_id' => $produk->category_id,
+                'nama' => $produk->nama,
+                'deskripsi' => $produk->deskripsi,
+                'tipe' => 'custom',
+                'harga_dasar' => $produk->harga_dasar,
+                'is_aktif' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.tipe', 'custom')
+            ->assertJsonPath('data.is_aktif', false);
+
+        $this->assertDatabaseHas('products', ['id' => $produk->id, 'is_aktif' => false]);
+    }
+
+    public function test_produk_custom_aktif_boleh_dinonaktifkan(): void
+    {
+        $produk = Product::create($this->dataProduk([
+            'tipe' => 'custom',
+            'is_aktif' => true,
+            'sla_hari' => 7,
+        ]));
+
+        $this->actingAs($this->adminEcommerce())
+            ->putJson('/admin/produk/'.$produk->id, [
+                'category_id' => $produk->category_id,
+                'nama' => $produk->nama,
+                'deskripsi' => $produk->deskripsi,
+                'tipe' => 'custom',
+                'harga_dasar' => $produk->harga_dasar,
+                'is_aktif' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.is_aktif', false);
+
+        $this->assertDatabaseHas('products', ['id' => $produk->id, 'is_aktif' => false]);
+    }
+
     public function test_admin_menonaktifkan_produk(): void
     {
         $produk = Product::create($this->dataProduk());

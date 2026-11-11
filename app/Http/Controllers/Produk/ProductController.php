@@ -103,7 +103,7 @@ class ProductController extends Controller
             return $this->tidakDitemukan();
         }
 
-        $data = $this->validasi($request);
+        $data = $this->validasi($request, $produk);
         $berkas = $request->file('gambar', []);
 
         DB::transaction(function () use ($produk, $data, $berkas) {
@@ -204,9 +204,10 @@ class ProductController extends Controller
     }
 
     /**
+     * @param  Product|null  $produk  Produk yang sedang diubah; null saat menambah.
      * @return array<string, mixed>
      */
-    private function validasi(Request $request): array
+    private function validasi(Request $request, ?Product $produk = null): array
     {
         // Nama dan deskripsi yang hanya berisi spasi dianggap kosong.
         foreach (['nama', 'deskripsi'] as $field) {
@@ -240,10 +241,19 @@ class ProductController extends Controller
         // gagal. Berkasnya ditangani simpanGambar().
         unset($data['gambar']);
 
-        // Produk custom selalu lahir Nonaktif: template (FR-CDSN-01) dan SLA
-        // (FR-CDSN-07) belum ada, dan database menolak custom aktif tanpa
+        // Produk custom baru selalu lahir Nonaktif: template (FR-CDSN-01) dan
+        // SLA (FR-CDSN-07) belum ada, dan database menolak custom aktif tanpa
         // `sla_hari`. Aktivasinya dilakukan di modul Desain.
-        if ($data['tipe'] === 'custom') {
+        //
+        // Aturan itu hanya untuk produk custom baru. Produk custom yang sudah
+        // aktif tetap aktif saat datanya diubah: memaksa Nonaktif di sini
+        // membuat Admin mematikan produk hanya karena memperbaiki nama atau
+        // harga. Pengecualiannya sempit — hanya saat produk yang diubah memang
+        // sudah custom dan sudah aktif — supaya mengubah produk jadi menjadi
+        // custom, atau mengaktifkan custom, tetap menghasilkan Nonaktif.
+        $customYangSudahAktif = $produk?->tipe === 'custom' && $produk->is_aktif;
+
+        if ($data['tipe'] === 'custom' && ! $customYangSudahAktif) {
             $data['is_aktif'] = false;
         }
 
