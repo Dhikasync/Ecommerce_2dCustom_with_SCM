@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Produk\Product;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -9,6 +8,6 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
-Route::get('/products', function () {
-    return response()->json(Product::with('category', 'variants')->get());
-});
+// Katalog produk tidak lagi memakai route sementara di sini. Endpoint
+// katalog dibangun terpisah saat FR-KTLG-01, dengan filter produk aktif,
+// paginasi, dan harga dari varian termurah.
