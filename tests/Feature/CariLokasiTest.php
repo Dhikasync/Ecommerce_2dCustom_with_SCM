@@ -11,11 +11,8 @@ use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
- * FR-PROF-01 #4, #11, #12, UC-08: GET /lokasi.
- *
- * Panggilan ke RajaOngkir selalu dipalsukan. CI tidak punya jaringan, dan
- * hasil test tidak boleh bergantung pada kuota atau latensi layanan luar.
- * Bentuk respons palsu disalin dari respons asli (id 4816, Bandung).
+ * FR-PROF-01 #4, #11, #12, UC-08. RajaOngkir selalu dipalsukan karena CI tanpa
+ * jaringan; bentuk respons palsu disalin dari respons asli.
  */
 class CariLokasiTest extends TestCase
 {
@@ -95,12 +92,7 @@ class CariLokasiTest extends TestCase
         });
     }
 
-    /**
-     * FR-PROF-01 #4: hasil pencarian harus diingat supaya endpoint alamat bisa
-     * memastikan lokasi yang dipilih memang berasal dari daftar ini. Tanpa
-     * ingatan itu, alamat hanya bisa memeriksa "kode terisi" dan lokasi
-     * karangan klien ikut tersimpan.
-     */
+    /** FR-PROF-01 #4: hasil pencarian diingat untuk validasi alamat. */
     public function test_hasil_pencarian_diingat_untuk_penyimpanan_alamat(): void
     {
         Http::fake(['*' => Http::response($this->responsLokasi())]);
@@ -132,8 +124,7 @@ class CariLokasiTest extends TestCase
     {
         Http::fake();
 
-        // Keputusan yang disetujui: dokumen tidak mengatur kata kunci kosong,
-        // jadi diperlakukan sama dengan "tidak ditemukan" memakai pesan #11.
+        // Kata kunci kosong dijawab seperti "tidak ditemukan" (#11); dokumen tidak mengaturnya.
         $this->actingAs(User::factory()->create())
             ->getJson('/lokasi?search=')
             ->assertOk()

@@ -8,11 +8,8 @@ use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
- * NFR-LOC-01, srs.md:162 dan srs.md:315: seluruh batas waktu dihitung dalam
- * WIB (UTC+7), dan seluruh data waktu dikirim serta ditampilkan dalam WIB.
- *
- * Konfigurasi bawaan Laravel adalah `UTC`, sehingga tanpa perubahan ini semua
- * timestamp tersimpan dan tampil 7 jam lebih awal dari waktu Indonesia.
+ * NFR-LOC-01, srs.md:162/315. Bawaan Laravel `UTC`, jadi tanpa ini semua
+ * timestamp tersimpan dan tampil 7 jam lebih awal dari WIB.
  */
 class ZonaWaktuTest extends TestCase
 {
@@ -22,8 +19,7 @@ class ZonaWaktuTest extends TestCase
     {
         $this->assertSame('Asia/Jakarta', config('app.timezone'));
 
-        // Laravel menurunkan nilai config ini ke PHP saat boot; kalau tidak,
-        // date()/strtotime() bawaan PHP tetap memakai UTC.
+        // Laravel menurunkan config ini ke PHP saat boot; kalau tidak, date() tetap UTC.
         $this->assertSame('Asia/Jakarta', date_default_timezone_get());
     }
 
@@ -34,8 +30,7 @@ class ZonaWaktuTest extends TestCase
         $this->assertSame('+07:00', $sekarang->format('P'));
         $this->assertSame('WIB', $sekarang->format('T'));
 
-        // Selisih zona waktu tidak boleh menggeser momennya: hanya cara
-        // menuliskannya yang berubah, bukan waktu sebenarnya.
+        // Selisih zona waktu hanya mengubah penulisan, bukan momennya.
         $selisihDetik = abs($sekarang->getTimestamp() - Carbon::now('UTC')->getTimestamp());
 
         $this->assertLessThan(5, $selisihDetik);
@@ -45,9 +40,7 @@ class ZonaWaktuTest extends TestCase
     {
         $kategori = Category::create(['nama' => 'Tas']);
 
-        // Timestamp ditulis oleh database lalu dibaca ulang oleh model.
-        // Kalau aplikasi menulis UTC padahal dirinya mengaku WIB, selisihnya
-        // akan sekitar 7 jam, bukan beberapa detik.
+        // Ditulis database lalu dibaca model; kalau aplikasi menulis UTC, selisihnya 7 jam.
         $tersimpan = $kategori->fresh()->created_at;
 
         $this->assertSame('+07:00', $tersimpan->format('P'));

@@ -8,14 +8,8 @@ use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 /**
- * FR-PROF-01 #9: ubah password dari halaman profil.
- *
- * Aturan dokumen: password lama divalidasi benar, lalu password diganti.
- * Panjang minimum 8 karakter mengikuti NFR-SEC-01 / FR-AUTH-02 #5.
- *
- * Pesan "Password lama tidak sesuai", "Password lama wajib diisi", dan
- * "Password berhasil diubah" tidak diatur dokumen; disetujui pemilik proyek
- * dan dicatat di README.
+ * FR-PROF-01 #9. Pesan "Password lama tidak sesuai" dan "Password berhasil
+ * diubah" tidak diatur dokumen; disetujui pemilik proyek dan dicatat di README.
  */
 class ChangePasswordTest extends TestCase
 {
@@ -151,8 +145,7 @@ class ChangePasswordTest extends TestCase
             ->putJson('/profil/password', $this->payload())
             ->assertOk();
 
-        // Kalau sesi sendiri ikut putus, User akan terlempar ke login setelah
-        // mengganti password — bukan perilaku yang diminta #9.
+        // Sesi sendiri tidak boleh ikut putus setelah ganti password (#9).
         $this->getJson('/profil')
             ->assertOk()
             ->assertJsonPath('data.email', 'budi@example.test');

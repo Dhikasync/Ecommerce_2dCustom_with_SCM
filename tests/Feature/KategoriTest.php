@@ -9,10 +9,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * FR-PROD-02, UC-10: hanya Admin Ecommerce yang mengelola kategori
- * (srs.md:398, srs.md:415). Pesan "Kategori sudah ada" dan "Kategori masih
- * digunakan oleh produk, pindahkan produk terlebih dahulu" dikunci apa
- * adanya karena ditetapkan dokumen (srs.md:406-407).
+ * FR-PROD-02, UC-10. Pesan "Kategori sudah ada" dan "Kategori masih digunakan
+ * oleh produk..." dikunci apa adanya karena ditetapkan dokumen (srs.md:406-407).
  */
 class KategoriTest extends TestCase
 {

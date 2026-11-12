@@ -11,25 +11,8 @@ use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
- * FR-PROF-01 #4-#7, UC-07: kelola alamat pengiriman.
- *
- * Aturan dokumen yang diuji di sini:
- * - alamat hanya tersimpan dengan lokasi terpilih dari hasil pencarian
- *   (kode lokasi + label lengkap), bukan diketik bebas (#4, #5, #11),
- * - menghapus alamat hanya boleh kalau User punya lebih dari satu (#6),
- * - hanya ada satu alamat utama per User, ditandai lewat aksi tersendiri (#7),
- * - User hanya menyentuh alamatnya sendiri (NFR-SEC-03).
- *
- * Perilaku yang tidak diatur dokumen dan disetujui pemilik proyek:
- * - alamat pertama otomatis menjadi utama,
- * - menghapus alamat utama mempromosikan alamat lain yang paling lama,
- * - teks pesan validasi (dokumen hanya menetapkan pesan nomor telepon).
- *
- * Aturan lokasi (#4, #5): `kode_lokasi` hanya diterima kalau kode itu pernah
- * muncul di hasil pencarian, dan `label_lokasi` diambil dari hasil pencarian
- * itu. Test yang menyimpan alamat lewat endpoint karena itu mencatat dulu
- * tawarannya lewat `tawarkanLokasi()`; alamat yang dibuat langsung lewat model
- * tidak terpengaruh karena tidak melewati validasi.
+ * FR-PROF-01 #4-#7, UC-07. Mencakup aturan lokasi (srs.md:174) dan keputusan
+ * luar dokumen: alamat pertama otomatis utama, hapus utama mempromosikan yang terlama.
  */
 class AlamatTest extends TestCase
 {
@@ -40,10 +23,7 @@ class AlamatTest extends TestCase
         return User::factory()->create($atribut);
     }
 
-    /**
-     * Meniru hasil GET /lokasi: kode ini sekarang boleh dipakai menyimpan
-     * alamat, dengan label yang ditentukan server.
-     */
+    /** Meniru GET /lokasi: kode ini kini boleh dipakai menyimpan alamat. */
     private function tawarkanLokasi(string $kode = '1140', string $label = 'AIRLANGGA, GUBENG, SURABAYA, JAWA TIMUR, 60286'): void
     {
         app(LokasiDitawarkan::class)->catat([
@@ -187,11 +167,7 @@ class AlamatTest extends TestCase
         $this->assertDatabaseCount('addresses', 0);
     }
 
-    /**
-     * Skenario #4: "Lokasi tidak dapat diketik bebas; hanya lokasi dari daftar
-     * hasil yang dapat dipilih". Kode yang tidak pernah muncul di GET /lokasi
-     * berarti dikarang klien, jadi harus ditolak sebelum tersimpan.
-     */
+    /** Skenario #4: lokasi tidak boleh diketik bebas. */
     public function test_kode_lokasi_yang_tidak_pernah_ditawarkan_ditolak(): void
     {
         $this->actingAs($this->pengguna())
@@ -205,11 +181,7 @@ class AlamatTest extends TestCase
         $this->assertDatabaseCount('addresses', 0);
     }
 
-    /**
-     * Label yang tampil di daftar alamat dan disalin ke pesanan harus berasal
-     * dari RajaOngkir, bukan dari klien — kalau tidak, alamat bisa berisi
-     * tulisan bebas meski kodenya sah.
-     */
+    /** Label yang disalin ke pesanan harus dari server, bukan kiriman klien. */
     public function test_label_lokasi_dari_klien_diganti_label_hasil_pencarian(): void
     {
         $this->tawarkanLokasi();
@@ -225,10 +197,7 @@ class AlamatTest extends TestCase
         ]);
     }
 
-    /**
-     * Rantai lengkap tanpa mencatat tawaran secara manual: hasil GET /lokasi
-     * yang benar-benar dikirim ke browser langsung dipakai menyimpan alamat.
-     */
+    /** Rantai lengkap: hasil GET /lokasi langsung dipakai menyimpan alamat. */
     public function test_hasil_pencarian_lokasi_dapat_langsung_dipakai_menyimpan_alamat(): void
     {
         config([
@@ -265,12 +234,7 @@ class AlamatTest extends TestCase
         ]);
     }
 
-    /**
-     * Skenario #5 hanya meminta User memilih ulang lokasi "bila perlu". Kode
-     * lokasi yang sudah tersimpan di alamat itu tetap sah walau tawaran
-     * pencariannya sudah kedaluwarsa, supaya mengubah alamat lama tidak
-     * memaksa pencarian ulang.
-     */
+    /** Skenario #5 "bila perlu": kode yang sudah tersimpan di alamat itu tetap sah. */
     public function test_alamat_tersimpan_tetap_bisa_diubah_setelah_tawaran_lokasi_hilang(): void
     {
         $user = $this->pengguna();
@@ -306,7 +270,7 @@ class AlamatTest extends TestCase
 
         Address::create($this->payload() + ['user_id' => $user->getKey(), 'is_utama' => true]);
 
-        // srs.md:375 — membuka profil menampilkan nama, email, dan daftar alamat.
+        // srs.md:375: membuka profil menampilkan daftar alamat.
         $this->actingAs($user)
             ->getJson('/profil')
             ->assertOk()
@@ -483,8 +447,7 @@ class AlamatTest extends TestCase
         $utama = Address::create($this->payload() + ['user_id' => $user->getKey(), 'is_utama' => true]);
         $kedua = Address::create($this->payload(['nama_penerima' => 'Siti Aminah']) + ['user_id' => $user->getKey()]);
 
-        // Penanda utama hanya lewat aksi #7; kalau ikut di sini, dua alamat
-        // bisa sama-sama utama dan unique index di database akan menolak.
+        // Penanda utama hanya lewat aksi #7; kalau ikut di sini, unique index menolak.
         $this->actingAs($user)
             ->putJson("/profil/alamat/{$kedua->getKey()}", $this->payload([
                 'nama_penerima' => 'Siti Aminah',
@@ -497,10 +460,8 @@ class AlamatTest extends TestCase
     }
 
     /**
-     * Relasi `Address::orders()` dipakai untuk menahan hapus alamat yang
-     * masih dipakai pesanan berjalan (FR-PROF-01 #6). Karena model ini
-     * berada di namespace App\Models\Profil, `Order::class` tanpa import
-     * akan menunjuk App\Models\Profil\Order dan relasinya gagal.
+     * FR-PROF-01 #6. `Order` diimpor dari App\Models; tanpa itu relasi menunjuk
+     * App\Models\Profil\Order dan gagal.
      */
     public function test_relasi_alamat_ke_pesanan_menunjuk_model_dan_kolom_yang_benar(): void
     {

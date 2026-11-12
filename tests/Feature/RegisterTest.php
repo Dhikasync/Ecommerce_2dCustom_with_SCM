@@ -68,9 +68,7 @@ class RegisterTest extends TestCase
     {
         Mail::fake();
 
-        // Aturan format yang sama dipakai di profil dan registrasi, supaya
-        // nomor yang tersimpan saat daftar tidak ditolak saat User menyimpan
-        // profilnya nanti.
+        // Aturan sama dipakai di profil dan registrasi, agar nomor yang diterima saat daftar tidak ditolak nanti.
         $this->postJson('/register', $this->payload(['no_hp' => '08123456789']))
             ->assertStatus(422)
             ->assertJsonValidationErrors(['no_hp' => 'Format nomor telepon tidak valid']);
@@ -100,8 +98,7 @@ class RegisterTest extends TestCase
         ]);
 
         $response->assertStatus(422);
-        // Pesan dikunci persis: User Story FR-AUTH-02 #3/#4 dan pola
-        // "Nama wajib diisi" dari FR-PROF-01 #10.
+        // Pesan dikunci persis dari FR-AUTH-02 #3/#4 dan FR-PROF-01 #10.
         $response->assertJsonPath('errors.name.0', 'Nama wajib diisi');
         $response->assertJsonPath('errors.email.0', 'Format email tidak valid');
         $response->assertJsonPath('errors.password.0', 'Konfirmasi password tidak sesuai');

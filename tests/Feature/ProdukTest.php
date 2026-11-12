@@ -14,13 +14,8 @@ use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
- * FR-PROD-01, UC-09: Admin Ecommerce mengelola produk jadi dan produk custom
- * beserta harga, berat, dan gambar (srs.md:414).
- *
- * Pesan yang dikunci dokumen hanya "Kode SKU sudah digunakan"
- * (user-story:223) yang diuji di langkah varian. Di sini yang dikunci adalah
- * aturan gambar JPG/PNG maks 2 MB (NFR-FIL-01), produk custom Nonaktif, dan
- * penjagaan hapus produk yang masih punya pesanan aktif (user-story:220).
+ * FR-PROD-01, UC-09, srs.md:414. Yang dikunci: gambar JPG/PNG maks 2 MB
+ * (NFR-FIL-01), custom baru Nonaktif, dan hapus produk dengan pesanan aktif.
  */
 class ProdukTest extends TestCase
 {
@@ -30,8 +25,7 @@ class ProdukTest extends TestCase
     {
         parent::setUp();
 
-        // Unggah gambar memakai multipart, bukan JSON, sehingga tanpa header
-        // ini kegagalan validasi dijawab redirect 302, bukan 422.
+        // Unggah memakai multipart; tanpa header JSON, kegagalan jadi redirect 302.
         $this->withHeaders(['Accept' => 'application/json']);
     }
 
@@ -62,15 +56,11 @@ class ProdukTest extends TestCase
 
     private function gambar(string $nama = 'foto.jpg', int $kb = 100): UploadedFile
     {
-        // GD tidak terpasang di mesin ini, jadi berkas palsu dibuat dengan
-        // ukuran dan MIME yang dilaporkan, bukan gambar sungguhan.
+        // GD tidak terpasang; berkas palsu hanya melaporkan ukuran dan MIME.
         return UploadedFile::fake()->create($nama, $kb, 'image/jpeg');
     }
 
-    /**
-     * Membuat pesanan nyata supaya penjagaan hapus produk teruji terhadap
-     * data, bukan terhadap mock.
-     */
+    /** Membuat pesanan nyata supaya penjagaan hapus teruji terhadap data. */
     private function pesananUntuk(Product $produk, string $status): OrderItem
     {
         $varian = Variant::create([
@@ -212,8 +202,7 @@ class ProdukTest extends TestCase
 
         $response->assertStatus(422);
 
-        // Pesan dibaca dari larik `errors`, bukan dot-path: kunci validasinya
-        // bertitik (`gambar.0`) sehingga dot-path akan salah pecah.
+        // Pesan dibaca dari larik `errors`; kunci bertitik (`gambar.0`) akan salah pecah.
         $this->assertSame('Format gambar harus JPG atau PNG', $response->json('errors')['gambar.0'][0]);
 
         $this->assertSame(0, Product::count());
@@ -301,7 +290,6 @@ class ProdukTest extends TestCase
 
     public function test_produk_custom_yang_sudah_aktif_tetap_aktif_saat_diubah(): void
     {
-        // Custom aktif hanya mungkin setelah template dan SLA ada; constraint
         // `products_custom_aktif_check` menolak custom aktif tanpa sla_hari.
         $produk = Product::create($this->dataProduk([
             'tipe' => 'custom',
@@ -564,8 +552,7 @@ class ProdukTest extends TestCase
 
     public function test_relasi_produk_dan_varian_menunjuk_kelas_yang_benar(): void
     {
-        // Penjaga sisa pemindahan model ke App\Models\Produk: relasi tanpa
-        // `use` akan mencari kelas di App\Models\Produk dan gagal.
+        // Penjaga import model: tanpa `use`, relasi mencari kelas di App\Models\Produk.
         $produk = Product::create($this->dataProduk());
         $varian = $produk->variants()->create([
             'sku' => 'TAS-RELASI',
