@@ -9,8 +9,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * FR-AUTH-01: `is_aktif` hanya diperiksa saat login, jadi tanpa middleware ini
- * akun yang dinonaktifkan tetap memakai sesinya sampai kedaluwarsa.
- * Dipasang setelah `auth`, sebelum `role`.
+ * akun nonaktif tetap memakai sesinya. Dipasang setelah `auth`, sebelum `role`.
  */
 class EnsureUserIsActive
 {

@@ -15,13 +15,8 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * FR-PROD-01 #3/#8, FR-PROD-03 #1, UC-09/UC-11: Admin Ecommerce mengelola
- * varian (SKU).
- *
- * Angka stok tidak pernah dibaca dari request: varian baru lahir berstok 0
- * (user-story:218, srs.md:405) dan hanya Admin SCM yang mengubahnya
- * (FR-SCM-01). Varian selalu dibaca lewat produknya supaya satu produk tidak
- * bisa mengubah varian milik produk lain dengan menebak id.
+ * FR-PROD-01 #3/#8, FR-PROD-03 #1, UC-09/UC-11: Admin Ecommerce mengelola varian.
+ * Stok tidak pernah dari request (user-story:218); hanya Admin SCM yang mengubah.
  */
 class VariantController extends Controller
 {
@@ -107,9 +102,8 @@ class VariantController extends Controller
     }
 
     /**
-     * Stok adalah wilayah Admin SCM: `stock_movements.variant_id` memakai
-     * ON DELETE CASCADE, jadi menghapus varian berstok membuang riwayat
-     * kartu stoknya tanpa jejak.
+     * Ditolak saat masih berstok atau ada pesanan aktif: CASCADE akan membuang
+     * riwayat kartu stoknya, wilayah Admin SCM.
      */
     public function hapus(int $id, int $varianId): JsonResponse
     {

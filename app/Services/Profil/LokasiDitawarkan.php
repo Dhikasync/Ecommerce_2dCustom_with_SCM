@@ -5,11 +5,8 @@ namespace App\Services\Profil;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * FR-PROF-01 #4/#5, srs.md:174: lokasi alamat harus berasal dari hasil
- * pencarian, tetapi cari dan simpan terjadi di dua permintaan berbeda.
- *
- * Cache, bukan tabel baru: SRS tidak memuat tabel lokasi. Label disimpan
- * supaya AlamatController tidak perlu percaya label kiriman klien.
+ * FR-PROF-01 #4/#5, srs.md:174: lokasi harus dari hasil pencarian, tetapi cari
+ * dan simpan beda permintaan. Cache, bukan tabel: SRS tak punya tabel lokasi.
  */
 class LokasiDitawarkan
 {

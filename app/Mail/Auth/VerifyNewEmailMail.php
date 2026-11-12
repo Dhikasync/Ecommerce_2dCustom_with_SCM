@@ -9,9 +9,8 @@ use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Support\Facades\URL;
 
 /**
- * FR-AUTH-06 #7, FR-PROF-01 #8. Hash yang ditandatangani adalah `pending_email`,
- * bukan email aktif; kalau memakai email lama, tautan tetap sah setelah email
- * berubah dan bisa dipakai ulang.
+ * FR-AUTH-06 #7, FR-PROF-01 #8. Hash yang ditandatangani `pending_email`, bukan
+ * email aktif; kalau email lama, tautan tetap sah setelah email berubah.
  */
 class VerifyNewEmailMail extends Mailable
 {

@@ -13,10 +13,8 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
- * FR-PROF-01 #1-#3, #8-#10, UC-06: melihat dan mengubah data profil sendiri.
- *
- * Email dan password punya endpoint sendiri: menerimanya di endpoint ubah
- * profil akan membuat perubahan sensitif terjadi tanpa verifikasi.
+ * FR-PROF-01 #1-#3, #8-#10, UC-06. Email dan password punya endpoint sendiri:
+ * menerimanya di ubah profil membuat perubahan sensitif tanpa verifikasi.
  */
 class ProfilController extends Controller
 {
@@ -68,11 +66,8 @@ class ProfilController extends Controller
     }
 
     /**
-     * FR-PROF-01 #9.
-     *
-     * Sesi lain ikut terputus karena `AuthenticateSession` menyimpan salinan
-     * hash password per sesi; setelah hash di database berubah, salinan lama
-     * tidak cocok lagi.
+     * FR-PROF-01 #9. `AuthenticateSession` memutus sesi lain karena salinan
+     * hash password per sesi tidak cocok lagi setelah hash database berubah.
      */
     public function ubahPassword(Request $request): JsonResponse
     {
@@ -150,9 +145,8 @@ class ProfilController extends Controller
     }
 
     /**
-     * FR-AUTH-06 #7. Tanpa middleware `auth`: tautan dibuka dari aplikasi
-     * email, belum tentu di browser yang sama. Keamanan bertumpu pada tanda
-     * tangan URL (24 jam) + hash token.
+     * FR-AUTH-06 #7. Tanpa `auth`: tautan dibuka dari aplikasi email. Keamanan
+     * bertumpu pada tanda tangan URL (24 jam) + hash token.
      */
     public function konfirmasiEmail(Request $request, string $id, string $hash): JsonResponse
     {

@@ -14,11 +14,7 @@ use Illuminate\Support\Facades\Storage;
 
 /**
  * FR-PROD-01, UC-09: Admin Ecommerce mengelola produk jadi dan custom.
- *
- * Gambar: berkas pertama menjadi `products.gambar` (foto kartu katalog),
- * sisanya galeri `product_images`. Produk custom baru selalu Nonaktif karena
- * template (FR-CDSN-01) dan SLA (FR-CDSN-07) belum ada, dan database menolak
- * custom aktif tanpa `sla_hari`. Stok tidak disentuh di sini (FR-SCM-01).
+ * Gambar pertama jadi `products.gambar`, sisanya galeri `product_images`.
  */
 class ProductController extends Controller
 {
@@ -94,11 +90,8 @@ class ProductController extends Controller
     }
 
     /**
-     * FR-PROD-01 #5. Ditolak bila masih ada pesanan berjalan atau varian
-     * berstok: `variants` dan `stock_movements` memakai ON DELETE CASCADE,
-     * jadi menghapus produk berstok membuang angka stok dan kartu stoknya.
-     * Penjagaan ini menutup jalan pintas dari aturan yang sama di
-     * VariantController::hapus.
+     * FR-PROD-01 #5. Ditolak juga saat varian berstok: CASCADE akan membuang
+     * angka stok dan kartu stoknya, wilayah Admin SCM.
      */
     public function hapus(int $id): JsonResponse
     {

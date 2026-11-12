@@ -70,11 +70,7 @@ class AuthController extends Controller
         ], 201);
     }
 
-    /**
-     * FR-AUTH-06 #2-#4: signature diperiksa middleware `signed`, lalu user,
-     * hash email, dan token. `is_aktif` tidak diperiksa karena verifikasi
-     * hanya menandai email; akun Nonaktif tetap ditolak saat login.
-     */
+    /** FR-AUTH-06 #2-#4: `signed` memeriksa signature, lalu id, hash email, dan token. */
     public function verify(Request $request, string $id, string $hash)
     {
         $user = User::find($id);
@@ -146,10 +142,8 @@ class AuthController extends Controller
     }
 
     /**
-     * FR-AUTH-01 #2/#3/#6, FR-AUTH-03 #1-#4.
-     *
-     * Kredensial salah, email tidak terdaftar, dan akun nonaktif memakai
-     * pesan yang sama supaya email mana yang ada tidak terbocorkan.
+     * FR-AUTH-01 #2/#3/#6, FR-AUTH-03 #1-#4. Kredensial salah, email tidak
+     * terdaftar, dan akun nonaktif dijawab sama agar email tidak terbocorkan.
      */
     public function login(Request $request)
     {

@@ -7,7 +7,7 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 
-/** FR-AUTH-06 #7: pengaman — pemilik akun tahu bila perubahan diajukan orang lain. */
+/** FR-AUTH-06 #7: pengaman, agar pemilik akun tahu bila perubahan diajukan orang lain. */
 class EmailChangeNoticeMail extends Mailable
 {
     public function __construct(public User $user, public string $emailBaru) {}

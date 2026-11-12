@@ -11,12 +11,8 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * FR-PROD-02, UC-10: Admin Ecommerce mengelola kategori produk. Pembatasan
- * role ada di middleware `role` pada routes/produk.php.
- *
- * Nama kategori unik tanpa membedakan huruf besar/kecil — keputusan di luar
- * dokumen (README) — dan diperiksa di sini supaya pesan "Kategori sudah ada"
- * (srs.md:406) keluar sebagai pesan validasi.
+ * FR-PROD-02, UC-10: Admin Ecommerce mengelola kategori; role dibatasi middleware.
+ * Nama unik tanpa beda huruf besar/kecil (keputusan luar dokumen, README).
  */
 class KategoriController extends Controller
 {

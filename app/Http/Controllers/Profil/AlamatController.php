@@ -13,15 +13,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * FR-PROF-01 #4-#7, UC-07: kelola alamat pengiriman milik User.
- *
- * Lokasi tidak boleh diketik bebas: `kode_lokasi` hanya diterima kalau pernah
- * muncul di GET /lokasi, dan `label_lokasi` selalu versi server, karena kode
- * itu dipakai menghitung ongkir (srs.md:174).
- *
- * `is_utama` hanya berubah lewat aksi #7; kalau ikut di ubah alamat, dua
- * alamat bisa sama-sama utama dan unique index `addresses_utama_unique`
- * menolak.
+ * FR-PROF-01 #4-#7, UC-07. `kode_lokasi` hanya dari GET /lokasi dan
+ * `label_lokasi` versi server (srs.md:174); `is_utama` hanya lewat aksi #7.
  */
 class AlamatController extends Controller
 {
@@ -45,7 +38,7 @@ class AlamatController extends Controller
     }
 
     /**
-     * FR-PROF-01 #4. Alamat pertama otomatis utama — keputusan di luar
+     * FR-PROF-01 #4. Alamat pertama otomatis utama (keputusan luar dokumen,
      * dokumen (README) supaya checkout punya default.
      */
     public function simpan(Request $request, LokasiDitawarkan $ditawarkan): JsonResponse
@@ -120,9 +113,8 @@ class AlamatController extends Controller
     }
 
     /**
-     * FR-PROF-01 #7. Urutannya penting: alamat lain dilepas dulu, baru target
-     * ditandai, karena PostgreSQL memeriksa unique index segera, bukan di akhir
-     * transaksi.
+     * FR-PROF-01 #7. Lepas alamat lain dulu: PostgreSQL memeriksa unique index
+     * segera, bukan di akhir transaksi.
      */
     public function jadikanUtama(Request $request, int $id): JsonResponse
     {
@@ -203,10 +195,8 @@ class AlamatController extends Controller
     }
 
     /**
-     * Sumber pertama: hasil pencarian yang masih diingat server. Sumber kedua:
-     * pasangan yang sudah tersimpan di alamat itu — perlu karena tawaran hanya
-     * diingat sementara, dan skenario #5 hanya menyebut memilih ulang "bila
-     * perlu". Pasangan tersimpan tetap sah karena sudah diperiksa saat disimpan.
+     * Tawaran cache dulu; kalau kedaluwarsa, pasangan yang sudah tersimpan di
+     * alamat itu tetap sah (skenario #5 hanya minta memilih ulang "bila perlu").
      */
     private function labelSah(string $kode, LokasiDitawarkan $ditawarkan, ?Address $alamat): ?string
     {
