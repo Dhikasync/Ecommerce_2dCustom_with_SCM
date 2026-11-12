@@ -9,17 +9,9 @@ use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Support\Facades\URL;
 
 /**
- * FR-AUTH-06 #7, FR-PROF-01 #8: tautan konfirmasi dikirim ke email BARU.
- *
- * Selama tautan ini belum diklik, kolom `email` masih berisi email lama,
- * sehingga User tetap bisa login dengan email lamanya.
- *
- * Beda dengan VerifyEmailMail: hash yang ditandatangani adalah hash email
- * baru (`pending_email`), bukan email yang sedang aktif. Kalau memakai email
- * lama, tautan akan tetap sah setelah email berubah dan bisa dipakai ulang.
- *
- * Masa berlaku mengikuti config auth.verification.expire (24 jam), sama
- * dengan tautan verifikasi registrasi.
+ * FR-AUTH-06 #7, FR-PROF-01 #8. Hash yang ditandatangani adalah `pending_email`,
+ * bukan email aktif; kalau memakai email lama, tautan tetap sah setelah email
+ * berubah dan bisa dipakai ulang.
  */
 class VerifyNewEmailMail extends Mailable
 {

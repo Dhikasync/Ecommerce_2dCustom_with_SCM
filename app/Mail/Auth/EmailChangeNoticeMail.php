@@ -7,13 +7,7 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 
-/**
- * FR-AUTH-06 #7: pemberitahuan perubahan email dikirim ke email LAMA.
- *
- * Ini bukan sekadar informasi: kalau perubahan diajukan orang lain yang
- * memegang sesi User, pemilik akun mengetahui kejadiannya dari email ini
- * walaupun tidak pernah membuka halaman profil.
- */
+/** FR-AUTH-06 #7: pengaman — pemilik akun tahu bila perubahan diajukan orang lain. */
 class EmailChangeNoticeMail extends Mailable
 {
     public function __construct(public User $user, public string $emailBaru) {}

@@ -4,11 +4,5 @@ namespace App\Exceptions\Profil;
 
 use RuntimeException;
 
-/**
- * SI-02: layanan lokasi (RajaOngkir) tidak bisa dipakai.
- *
- * Dilempar untuk kunci kosong, gangguan jaringan, status HTTP gagal, atau
- * bentuk respons yang tidak dikenali. Pemanggil menerjemahkannya menjadi
- * pesan FR-PROF-01 #12, jadi detail teknis tidak pernah sampai ke User.
- */
+/** SI-02: RajaOngkir gagal; pemanggil mengubahnya jadi pesan FR-PROF-01 #12. */
 class RajaOngkirException extends RuntimeException {}

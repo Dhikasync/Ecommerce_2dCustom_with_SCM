@@ -6,10 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ProductImage extends Model
 {
-    /**
-     * FR-KTLG-02 #1: galeri gambar pada detail produk.
-     * `products.gambar` tetap menjadi foto utama pada kartu katalog.
-     */
+    /** Galeri detail produk (FR-KTLG-02 #1); foto utama tetap `products.gambar`. */
     protected $fillable = [
         'product_id',
         'gambar',

@@ -7,19 +7,12 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 
-/**
- * FR-AUTH-04 #1: email berisi tautan reset password bertoken.
- *
- * Token dibuat oleh PasswordBroker (disimpan sebagai hash di tabel
- * password_reset_tokens), jadi token asli hanya ada di email ini.
- */
+/** FR-AUTH-04 #1. Token dibuat PasswordBroker; yang tersimpan hanya hash-nya. */
 class ResetPasswordMail extends Mailable
 {
     public function __construct(public User $user, public string $token) {}
 
-    /**
-     * Tautan 24 jam sesuai FR-AUTH-04 #4 (config auth.passwords.users.expire).
-     */
+    /** Tautan 24 jam sesuai FR-AUTH-04 #4 (`auth.passwords.users.expire`). */
     public static function urlFor(User $user, string $token): string
     {
         return route('password.reset', [

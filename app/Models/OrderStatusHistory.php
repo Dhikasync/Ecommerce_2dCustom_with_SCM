@@ -7,10 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class OrderStatusHistory extends Model
 {
-    /**
-     * FR-ORDR-01 #2 dan FR-ORDR-03 #5: setiap perubahan status pesanan
-     * dicatat beserta waktu dan pelakunya.
-     */
+    /** FR-ORDR-01 #2, FR-ORDR-03 #5: status beserta waktu dan pelakunya. */
     protected $fillable = [
         'order_id',
         'status_lama',

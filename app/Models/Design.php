@@ -41,9 +41,7 @@ class Design extends Model
         return $this->belongsTo(Variant::class);
     }
 
-    /**
-     * FR-CDSN-05 #5: riwayat validasi desain per versi.
-     */
+    /** FR-CDSN-05 #5: riwayat validasi desain per versi. */
     public function revisions()
     {
         return $this->hasMany(DesignRevision::class);

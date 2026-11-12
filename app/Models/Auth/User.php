@@ -27,10 +27,7 @@ class User extends Authenticatable implements MustVerifyEmail
     /** @use HasFactory<UserFactory> */
     use HasFactory;
 
-    /**
-     * Kolom yang boleh diisi massal. `role` sengaja ada di sini supaya
-     * pembatasan role dilakukan di controller (FR-AUTH-01 #7), bukan di model.
-     */
+    /** `role` bisa diisi massal; pembatasannya di controller (FR-AUTH-01 #7). */
     protected $fillable = [
         'name',
         'email',
@@ -44,7 +41,6 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $hidden = [
         'password',
         'remember_token',
-        // FR-AUTH-06 #7: token konfirmasi email baru juga rahasia.
         'pending_email_token',
     ];
 
@@ -54,11 +50,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'is_aktif' => 'boolean',
     ];
 
-    /**
-     * Email selalu disimpan dalam huruf kecil. Alamat email tidak membedakan
-     * huruf besar/kecil, jadi tanpa ini "Budi@example.test" dan
-     * "budi@example.test" bisa lolos validasi unique lalu bentrok di database.
-     */
+    /** Email tidak membedakan huruf besar/kecil, jadi disamakan agar unique tidak bentrok. */
     protected function email(): Attribute
     {
         return Attribute::make(
@@ -66,11 +58,7 @@ class User extends Authenticatable implements MustVerifyEmail
         );
     }
 
-    /**
-     * Email baru ikut dinormalkan seperti email utama, supaya
-     * "Budi@Example.Test" dan "budi@example.test" tidak dianggap dua alamat
-     * berbeda saat memeriksa apakah email sudah dipakai.
-     */
+    /** Sama seperti `email`, supaya pengecekan "sudah dipakai" konsisten. */
     protected function pendingEmail(): Attribute
     {
         return Attribute::make(
@@ -79,14 +67,10 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * FR-AUTH-06 #7, FR-PROF-01 #8: simpan email baru sebagai "menunggu
-     * konfirmasi". Email lama di kolom `email` TIDAK disentuh di sini, karena
-     * dokumen menetapkan email lama tetap berlaku sampai verifikasi selesai.
+     * FR-AUTH-06 #7, FR-PROF-01 #8: email lama tetap berlaku sampai konfirmasi.
+     * Yang disimpan hanya hash token; token baru membatalkan tautan lama.
      *
-     * Token baru dibuat setiap permintaan, jadi tautan pada email sebelumnya
-     * otomatis tidak berlaku. Yang disimpan hanya hash SHA-256-nya.
-     *
-     * @return string token asli, hanya untuk dikirim lewat email
+     * @return string token asli, untuk dikirim lewat email
      */
     public function ajukanPerubahanEmail(string $emailBaru): string
     {
@@ -100,28 +84,14 @@ class User extends Authenticatable implements MustVerifyEmail
         return $token;
     }
 
-    /**
-     * Kirim tautan konfirmasi ke email BARU dan pemberitahuan ke email LAMA.
-     *
-     * Dua email dikirim karena dokumen meminta keduanya: tautan konfirmasi ke
-     * email baru, dan "pemberitahuan perubahan dikirim ke email lama"
-     * (FR-AUTH-06 #7). Pemberitahuan ke email lama adalah pengaman: kalau
-     * perubahan dilakukan orang lain, pemilik akun tahu tanpa harus menunggu.
-     */
+    /** Tautan ke email baru + pemberitahuan ke email lama (FR-AUTH-06 #7). */
     public function kirimTautanPerubahanEmail(string $token): void
     {
         Mail::to((string) $this->pending_email)->send(new VerifyNewEmailMail($this, $token));
         Mail::to($this->email)->send(new EmailChangeNoticeMail($this, (string) $this->pending_email));
     }
 
-    /**
-     * FR-AUTH-06 #5: setiap pengiriman membuat token baru, sehingga
-     * tautan pada email sebelumnya tidak berlaku lagi.
-     *
-     * Yang disimpan hanya hash SHA-256 dari token. Kalau isi tabel bocor,
-     * token asli tidak bisa dipakai membajak verifikasi; token asli hanya
-     * ada di tautan yang dikirim ke email User.
-     */
+    /** FR-AUTH-06 #5: hanya hash token yang disimpan, token asli hanya di email. */
     public function sendEmailVerificationNotification()
     {
         $token = Str::random(64);
@@ -131,9 +101,7 @@ class User extends Authenticatable implements MustVerifyEmail
         Mail::to($this->email)->send(new VerifyEmailMail($this, $token));
     }
 
-    /**
-     * FR-AUTH-01 #7: apakah user memegang salah satu role yang diminta.
-     */
+    /** FR-AUTH-01 #7. */
     public function hasRole(string ...$roles): bool
     {
         return in_array($this->role, $roles, true);
@@ -144,9 +112,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Design::class);
     }
 
-    /**
-     * FR-CART-01: satu User hanya punya satu keranjang.
-     */
+    /** FR-CART-01: satu User satu keranjang. */
     public function cart()
     {
         return $this->hasOne(Cart::class);
@@ -167,12 +133,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Review::class);
     }
 
-    /**
-     * Notifikasi in-app memakai tabel `notifications` milik aplikasi
-     * (judul, pesan, tipe, is_dibaca). Trait Notifiable bawaan Laravel tidak
-     * dipakai karena method notifications()-nya menargetkan skema tabel yang
-     * berbeda; email dikirim lewat Mail/Mailable.
-     */
+    /** Notifikasi in-app; trait Notifiable tidak dipakai karena skemanya berbeda. */
     public function appNotifications()
     {
         return $this->hasMany(Notification::class);
@@ -183,25 +144,19 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(DesignRevision::class, 'divalidasi_oleh');
     }
 
-    /**
-     * FR-ORDR-02 #2: permohonan pembatalan yang diajukan User.
-     */
+    /** FR-ORDR-02 #2: permohonan pembatalan yang diajukan User. */
     public function cancellationRequests()
     {
         return $this->hasMany(CancellationRequest::class);
     }
 
-    /**
-     * FR-ORDR-06 #2/#3: permohonan yang diputuskan Admin.
-     */
+    /** FR-ORDR-06 #2/#3: permohonan yang diputuskan Admin. */
     public function decidedCancellationRequests()
     {
         return $this->hasMany(CancellationRequest::class, 'diputuskan_oleh');
     }
 
-    /**
-     * NFR-SEC-07: jejak aksi sensitif yang dilakukan Admin ini.
-     */
+    /** NFR-SEC-07. */
     public function auditLogs()
     {
         return $this->hasMany(AuditLog::class);

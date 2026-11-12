@@ -8,14 +8,9 @@ use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * FR-AUTH-01: akun Nonaktif tidak boleh memakai sesi yang sudah terbentuk.
- *
- * Pemeriksaan `is_aktif` di AuthController hanya berjalan saat login. Tanpa
- * middleware ini, akun yang dinonaktifkan lewat `UPDATE users SET is_aktif =
- * false` tetap memegang akses sampai sesinya habis (maksimal 24 jam).
- *
- * Dipasang setelah `auth` dan sebelum `role`, misalnya
- * `['auth', 'active', 'role:admin_ecommerce']`.
+ * FR-AUTH-01: `is_aktif` hanya diperiksa saat login, jadi tanpa middleware ini
+ * akun yang dinonaktifkan tetap memakai sesinya sampai kedaluwarsa.
+ * Dipasang setelah `auth`, sebelum `role`.
  */
 class EnsureUserIsActive
 {
@@ -30,8 +25,7 @@ class EnsureUserIsActive
         }
 
         if (! $user->is_aktif) {
-            // Bukan hanya permintaan ini yang ditolak: sesinya dibuang supaya
-            // akun nonaktif tidak bisa melanjutkan dengan cookie yang sama.
+            // Sesi dibuang, bukan hanya request ini yang ditolak.
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

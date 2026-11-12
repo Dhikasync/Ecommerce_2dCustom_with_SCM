@@ -68,33 +68,25 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
-    /**
-     * FR-PAYM-01 #3: satu pesanan boleh punya beberapa percobaan pembayaran.
-     */
+    /** FR-PAYM-01 #3: satu pesanan boleh punya beberapa percobaan pembayaran. */
     public function payments()
     {
         return $this->hasMany(Payment::class);
     }
 
-    /**
-     * Percobaan pembayaran terakhir menentukan status pembayaran pesanan.
-     */
+    /** Percobaan terakhir yang menentukan status pembayaran pesanan. */
     public function latestPayment()
     {
         return $this->hasOne(Payment::class)->latestOfMany();
     }
 
-    /**
-     * FR-ORDR-01 #2 dan FR-ORDR-03 #5: riwayat perubahan status beserta waktunya.
-     */
+    /** FR-ORDR-01 #2, FR-ORDR-03 #5. */
     public function statusHistories()
     {
         return $this->hasMany(OrderStatusHistory::class);
     }
 
-    /**
-     * FR-ORDR-02 #2 dan FR-ORDR-06: permohonan pembatalan setelah Lunas.
-     */
+    /** FR-ORDR-02 #2, FR-ORDR-06. */
     public function cancellationRequests()
     {
         return $this->hasMany(CancellationRequest::class);

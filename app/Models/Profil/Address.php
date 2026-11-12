@@ -8,11 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Address extends Model
 {
-    /**
-     * FR-PROF-01: alamat hanya menyimpan data yang diminta SRS.
-     * Lokasi mengikuti kode wilayah; label lokasi disimpan sebagai teks
-     * yang ditampilkan ke User dan disalin ke pesanan saat checkout.
-     */
+    /** FR-PROF-01. `label_lokasi` disalin ke pesanan saat checkout. */
     protected $fillable = [
         'user_id',
         'nama_penerima',
@@ -32,21 +28,13 @@ class Address extends Model
         return $this->belongsTo(User::class);
     }
 
+    /** `Order` diimpor dari App\Models; tanpa itu relasi menunjuk namespace salah. */
     public function orders()
     {
-        // `Order` ada di App\Models, sedangkan model ini di App\Models\Profil.
-        // Tanpa import di atas, PHP membaca `Order::class` sebagai
-        // App\Models\Profil\Order dan relasinya gagal saat dipakai.
         return $this->hasMany(Order::class);
     }
 
-    /**
-     * Ringkasan yang dikirim ke browser. Daftar kolom ditulis eksplisit
-     * supaya `user_id` dan timestamp tidak perlu ikut, dan supaya bentuk
-     * JSON-nya sama di GET /profil maupun GET /profil/alamat.
-     *
-     * @return array<string, mixed>
-     */
+    /** Kolom eksplisit supaya bentuk JSON sama di GET /profil dan GET /profil/alamat. */
     public function ringkas(): array
     {
         return [
