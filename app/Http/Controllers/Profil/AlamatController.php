@@ -6,17 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Models\Auth\User;
 use App\Models\Profil\Address;
 use App\Rules\NomorTelepon;
+use App\Services\Profil\LokasiDitawarkan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * FR-PROF-01 #4-#7, UC-07: kelola alamat pengiriman milik User.
  *
- * Lokasi tidak pernah diketik bebas: `kode_lokasi` dan `label_lokasi` wajib
- * diisi dari hasil pencarian (GET /lokasi). Kode lokasi inilah yang nanti
- * dipakai menghitung ongkir, jadi alamat tanpa lokasi tidak boleh tersimpan
- * (#4, #5, srs.md:174).
+ * Lokasi tidak pernah diketik bebas: `kode_lokasi` hanya diterima kalau kode
+ * itu pernah muncul di hasil pencarian (GET /lokasi), dan `label_lokasi`
+ * selalu diambil dari hasil pencarian itu, bukan dari kiriman klien. Kode
+ * lokasi inilah yang nanti dipakai menghitung ongkir, jadi alamat tanpa
+ * lokasi tidak boleh tersimpan (#4, #5, srs.md:174).
  *
  * Penanda utama hanya bisa diubah lewat aksi tersendiri (#7), tidak lewat
  * ubah alamat. Kalau ikut di ubah alamat, dua alamat bisa sama-sama utama dan
@@ -25,6 +28,12 @@ use Illuminate\Support\Facades\DB;
 class AlamatController extends Controller
 {
     private const PESAN_TIDAK_DITEMUKAN = 'Alamat tidak ditemukan';
+
+    /**
+     * Pesan persis User Story FR-PROF-01 #11. Dipakai saat kode lokasi tidak
+     * dikenal, karena User memang harus mencari ulang dan memilih dari daftar.
+     */
+    private const PESAN_LOKASI_TIDAK_DIKENAL = 'Lokasi tidak ditemukan, coba kata kunci lain';
 
     /**
      * FR-PROF-01 #1, srs.md:375: daftar alamat milik User, utama lebih dulu.
@@ -48,9 +57,9 @@ class AlamatController extends Controller
      * Alamat pertama otomatis menjadi utama supaya checkout selalu punya
      * pilihan default. Ini keputusan di luar dokumen, dicatat di README.
      */
-    public function simpan(Request $request): JsonResponse
+    public function simpan(Request $request, LokasiDitawarkan $ditawarkan): JsonResponse
     {
-        $data = $this->validasi($request);
+        $data = $this->validasi($request, $ditawarkan);
         $user = $request->user();
 
         $alamat = DB::transaction(function () use ($user, $data) {
@@ -72,7 +81,7 @@ class AlamatController extends Controller
      * skenario #5 menyebut alamat seperti itu hanya dapat disimpan setelah
      * User memilih lokasi.
      */
-    public function ubah(Request $request, int $id): JsonResponse
+    public function ubah(Request $request, int $id, LokasiDitawarkan $ditawarkan): JsonResponse
     {
         $alamat = $this->milikUser($request->user(), $id);
 
@@ -81,7 +90,7 @@ class AlamatController extends Controller
         }
 
         // `is_utama` tidak ada di $data, jadi tidak bisa ikut berubah.
-        $alamat->update($this->validasi($request));
+        $alamat->update($this->validasi($request, $ditawarkan, $alamat));
 
         return response()->json([
             'message' => 'Alamat berhasil diperbarui',
@@ -161,12 +170,14 @@ class AlamatController extends Controller
     }
 
     /**
+     * @param  Address|null  $alamat  Alamat yang sedang diubah; null saat menambah.
      * @return array<string, mixed>
      */
-    private function validasi(Request $request): array
+    private function validasi(Request $request, LokasiDitawarkan $ditawarkan, ?Address $alamat = null): array
     {
-        // Nama dan lokasi yang hanya berisi spasi dianggap kosong.
-        foreach (['nama_penerima', 'alamat_lengkap', 'kode_lokasi', 'label_lokasi'] as $field) {
+        // Nama dan lokasi yang hanya berisi spasi dianggap kosong. `no_hp`
+        // tidak ikut dirapikan karena formatnya sudah diperiksa NomorTelepon.
+        foreach (['nama_penerima', 'alamat_lengkap', 'kode_lokasi'] as $field) {
             $nilai = $request->input($field);
 
             if (is_string($nilai)) {
@@ -174,13 +185,15 @@ class AlamatController extends Controller
             }
         }
 
-        return $request->validate([
+        $data = $request->validate([
             'nama_penerima' => ['required', 'string', 'max:255'],
             // Nomor penerima bisa berbeda dari nomor akun, jadi tetap diminta.
             'no_hp' => ['required', 'string', new NomorTelepon],
             'alamat_lengkap' => ['required', 'string'],
             'kode_lokasi' => ['required', 'string', 'max:255'],
-            'label_lokasi' => ['required', 'string', 'max:255'],
+            // `label_lokasi` masih diterima supaya bentuk request tidak berubah,
+            // tetapi nilainya tidak dipakai: label diambil dari hasil pencarian.
+            'label_lokasi' => ['sometimes', 'string', 'max:255'],
         ], [
             // Pesan turunan pola "Nama wajib diisi" (#10); dokumen hanya
             // menetapkan pesan format nomor telepon (#3).
@@ -188,8 +201,49 @@ class AlamatController extends Controller
             'no_hp.required' => 'Nomor telepon wajib diisi',
             'alamat_lengkap.required' => 'Alamat lengkap wajib diisi',
             'kode_lokasi.required' => 'Lokasi wajib dipilih',
-            'label_lokasi.required' => 'Lokasi wajib dipilih',
         ]);
+
+        $kode = $data['kode_lokasi'];
+        $label = $this->labelSah($kode, $ditawarkan, $alamat);
+
+        if ($label === null) {
+            // Kode ini tidak pernah muncul di hasil pencarian, jadi lokasinya
+            // diketik bebas. Ditolak sebelum apa pun tersimpan (#4, #12).
+            throw ValidationException::withMessages([
+                'kode_lokasi' => self::PESAN_LOKASI_TIDAK_DIKENAL,
+            ]);
+        }
+
+        // Label selalu versi server, bukan kiriman klien, supaya tulisan yang
+        // tampil di daftar alamat dan disalin ke pesanan tidak bisa dipalsukan.
+        $data['label_lokasi'] = $label;
+
+        return $data;
+    }
+
+    /**
+     * Label sah untuk satu kode lokasi.
+     *
+     * Sumber pertama: hasil pencarian yang masih diingat server. Sumber kedua:
+     * pasangan yang sudah tersimpan di alamat itu sendiri. Pengecualian kedua
+     * perlu karena tawaran pencarian hanya diingat sementara — tanpa itu,
+     * User yang mengubah alamat lama setelah tawaran kedaluwarsa akan diminta
+     * memilih ulang lokasi padahal skenario #5 hanya menyebut "bila perlu".
+     * Pasangan tersimpan tetap sah karena sudah diperiksa saat disimpan.
+     */
+    private function labelSah(string $kode, LokasiDitawarkan $ditawarkan, ?Address $alamat): ?string
+    {
+        $label = $ditawarkan->label($kode);
+
+        if ($label !== null) {
+            return $label;
+        }
+
+        if ($alamat?->kode_lokasi === $kode) {
+            return $alamat->label_lokasi;
+        }
+
+        return null;
     }
 
     private function tidakDitemukan(): JsonResponse
