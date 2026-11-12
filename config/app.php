@@ -63,9 +63,14 @@ return [
     | will be used by the PHP date and date-time functions. The timezone
     | is set to "UTC" by default as it is suitable for most use cases.
     |
+    | Nichibag memakai WIB (UTC+7) di seluruh aplikasi (NFR-LOC-01), jadi
+    | nilai ini ditulis tetap, bukan lewat env: satu-satunya zona waktu yang
+    | dipakai adalah WIB, dan variabel env akan membuka celah nilai lain ikut
+    | masuk tanpa ada kebutuhan.
+    |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => 'Asia/Jakarta',
 
     /*
     |--------------------------------------------------------------------------
