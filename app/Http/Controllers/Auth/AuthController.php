@@ -19,35 +19,20 @@ use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
-    /**
-     * NFR-SEC-02: setelah 5 kali gagal beruntun, akun dikunci sementara
-     * 15 menit. Batas per IP lebih longgar supaya satu kantor/NAT tidak
-     * saling mengunci, tetapi tetap mencegah satu IP menebak banyak akun.
-     */
+    /** NFR-SEC-02: 5 gagal per akun, 20 per IP, jendela 15 menit. */
     private const BATAS_GAGAL_PER_AKUN = 5;
 
     private const BATAS_GAGAL_PER_IP = 20;
 
     private const JENDELA_KUNCI_DETIK = 15 * 60;
 
-    /**
-     * Hash bcrypt dari string acak, hanya untuk menyamakan biaya verifikasi
-     * saat email tidak ditemukan. Dibuat dengan cost 12, sama dengan
-     * BCRYPT_ROUNDS di .env.example. Kalau cost diubah, buat ulang hash ini.
-     */
+    /** Bcrypt cost 12: menyamakan waktu verifikasi saat email tidak ditemukan. */
     private const HASH_PALSU = '$2y$12$Zcb8I3ItxN3/X42kvYN/2uryGwYsvm2zEmfKBecaTDYhAjOlghQ0i';
 
-    /**
-     * FR-AUTH-06 #5/#6: kirim ulang tautan verifikasi dibatasi 5 permintaan
-     * per 15 menit untuk kombinasi email + IP.
-     */
+    /** FR-AUTH-06 #5/#6: 5 permintaan per 15 menit per email + IP. */
     private const BATAS_KIRIM_ULANG = 5;
 
-    /**
-     * Bentuk email yang diterima harus sama di semua endpoint. Kalau aturan ini
-     * ditulis berulang, cepat atau lambat satu endpoint akan tertinggal saat
-     * aturannya diubah.
-     */
+    /** Satu aturan email untuk semua endpoint, supaya tidak ada yang tertinggal. */
     private const ATURAN_EMAIL = 'required|string|email|max:255';
 
     private const PESAN_TERLALU_BANYAK = 'Terlalu banyak permintaan, coba lagi beberapa saat lagi';
@@ -56,10 +41,7 @@ class AuthController extends Controller
 
     private const PESAN_TAUTAN_RESET_TIDAK_VALID = 'Link reset tidak valid atau sudah dipakai';
 
-    /**
-     * FR-AUTH-02 #1: membuat akun "Belum Diverifikasi", mengirim email
-     * verifikasi, dan TIDAK melakukan login otomatis.
-     */
+    /** FR-AUTH-02 #1: akun lahir "Belum Diverifikasi" dan tidak login otomatis. */
     public function register(Request $request)
     {
         $this->normalisasiEmail($request);
@@ -89,13 +71,9 @@ class AuthController extends Controller
     }
 
     /**
-     * FR-AUTH-06 #2-#4: verifikasi email lewat tautan bertanda tangan.
-     *
-     * Urutan pemeriksaan: signature (middleware `signed`), user, hash email,
-     * lalu token. Signature sudah diperiksa sebelum method ini dijalankan.
-     *
-     * Status akun (is_aktif) sengaja tidak diperiksa di sini: verifikasi hanya
-     * menandai email, dan akun Nonaktif tetap ditolak saat login.
+     * FR-AUTH-06 #2-#4: signature diperiksa middleware `signed`, lalu user,
+     * hash email, dan token. `is_aktif` tidak diperiksa karena verifikasi
+     * hanya menandai email; akun Nonaktif tetap ditolak saat login.
      */
     public function verify(Request $request, string $id, string $hash)
     {
@@ -111,7 +89,6 @@ class AuthController extends Controller
 
         $token = (string) $request->query('token', '');
 
-        // Yang tersimpan adalah hash SHA-256 token, bukan token aslinya.
         if (! $user->email_verification_token || ! hash_equals($user->email_verification_token, hash('sha256', $token))) {
             return $this->tautanVerifikasiTidakValid();
         }
@@ -124,9 +101,7 @@ class AuthController extends Controller
         return $this->keLogin('Email berhasil diverifikasi, silakan login');
     }
 
-    /**
-     * FR-AUTH-06 #1/#3: halaman "Cek email Anda".
-     */
+    /** FR-AUTH-06 #1/#3. */
     public function notice()
     {
         return response()->json([
@@ -134,12 +109,7 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * FR-AUTH-06 #5/#6: kirim ulang tautan verifikasi.
-     *
-     * Pesan selalu generik supaya tidak membocorkan email mana yang
-     * terdaftar. Batas 5 permintaan per 15 menit per email + IP.
-     */
+    /** FR-AUTH-06 #5/#6: pesan always-generik agar email terdaftar tidak terbuka. */
     public function resend(Request $request)
     {
         $this->normalisasiEmail($request);
@@ -148,7 +118,6 @@ class AuthController extends Controller
             'email' => self::ATURAN_EMAIL,
         ]);
 
-        // Email sudah dinormalkan di atas, jadi tidak perlu di-lower lagi.
         $key = 'kirim-verifikasi:'.$data['email'].'|'.$request->ip();
 
         if (RateLimiter::tooManyAttempts($key, self::BATAS_KIRIM_ULANG)) {
@@ -160,8 +129,6 @@ class AuthController extends Controller
         $user = User::where('email', $data['email'])->first();
 
         if ($user && ! $user->hasVerifiedEmail()) {
-            // Sama seperti lupa password: pengiriman email tidak boleh
-            // membedakan waktu respons email terdaftar dan tak terdaftar.
             defer(fn () => $user->sendEmailVerificationNotification());
         }
 
@@ -170,9 +137,7 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * FR-AUTH-01 #1/#4, FR-AUTH-03 #1: halaman login untuk Admin dan User.
-     */
+    /** FR-AUTH-01 #1/#4, FR-AUTH-03 #1. */
     public function showLogin()
     {
         return response()->json([
@@ -181,11 +146,10 @@ class AuthController extends Controller
     }
 
     /**
-     * FR-AUTH-01 #2/#3/#6, FR-AUTH-03 #1-#4: login dengan email dan password.
+     * FR-AUTH-01 #2/#3/#6, FR-AUTH-03 #1-#4.
      *
-     * Kredensial salah, email tidak terdaftar, dan akun nonaktif dibalas
-     * dengan pesan yang sama supaya tidak membocorkan email mana yang ada.
-     * Batas 5 kegagalan per akun dan 20 kegagalan per IP dalam 15 menit.
+     * Kredensial salah, email tidak terdaftar, dan akun nonaktif memakai
+     * pesan yang sama supaya email mana yang ada tidak terbocorkan.
      */
     public function login(Request $request)
     {
@@ -209,10 +173,8 @@ class AuthController extends Controller
 
         $user = User::where('email', $data['email'])->first();
 
-        // Hash selalu diperiksa, termasuk saat email tidak ditemukan. Tanpa
-        // ini, respons untuk email tak terdaftar kembali secepat kueri
-        // database sementara email terdaftar membayar bcrypt (~225 ms),
-        // sehingga form login bisa dipakai memetakan email admin.
+        // Hash tetap diperiksa saat email tidak ditemukan, supaya waktu respons
+        // tidak membocorkan email mana yang terdaftar.
         $hash = $user?->password ?? self::HASH_PALSU;
         $cocok = Hash::check($data['password'], $hash);
 
@@ -237,9 +199,8 @@ class AuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        // Hanya hitungan akun yang dibersihkan. Hitungan IP sengaja dibiarkan
-        // agar penyerang tidak bisa mereset jatah IP-nya dengan login ke akun
-        // miliknya sendiri.
+        // Hanya hitungan akun yang dibersihkan: hitungan IP dibiarkan agar
+        // penyerang tidak mereset jatah IP-nya dengan login ke akunnya sendiri.
         RateLimiter::clear($kunciAkun);
 
         return response()->json([
@@ -249,12 +210,7 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * FR-AUTH-01 #5, FR-AUTH-03: mengakhiri sesi.
-     *
-     * Sesi dibuang seluruhnya dan token CSRF dibuat ulang, sehingga ID sesi
-     * maupun token lama tidak bisa dipakai lagi.
-     */
+    /** FR-AUTH-01 #5, FR-AUTH-03: sesi dibuang dan token CSRF dibuat ulang. */
     public function logout(Request $request)
     {
         Auth::logout();
@@ -267,12 +223,7 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * FR-AUTH-04 #1/#2: permintaan tautan reset password.
-     *
-     * Pesan selalu sama, baik email terdaftar maupun tidak, supaya form ini
-     * tidak bisa dipakai memeriksa email mana yang punya akun.
-     */
+    /** FR-AUTH-04 #1/#2: pesan sama untuk email terdaftar maupun tidak. */
     public function forgotPassword(Request $request)
     {
         $this->normalisasiEmail($request);
@@ -284,8 +235,7 @@ class AuthController extends Controller
         $user = User::where('email', $data['email'])->first();
 
         if ($user) {
-            // Token dibuat dan email dikirim setelah respons terkirim, supaya
-            // email terdaftar tidak lebih lambat dari email tak terdaftar.
+            // Dikirim setelah respons supaya kedua kasus sama lambatnya.
             defer(function () use ($user) {
                 $token = Password::createToken($user);
 
@@ -298,12 +248,7 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * FR-AUTH-04 #3: halaman pengisian password baru.
-     *
-     * Endpoint ini hanya mengembalikan data yang dibutuhkan form; token
-     * baru diperiksa saat password disimpan.
-     */
+    /** FR-AUTH-04 #3: token baru diperiksa saat password disimpan. */
     public function showReset(Request $request, string $token)
     {
         return response()->json([
@@ -314,11 +259,8 @@ class AuthController extends Controller
     }
 
     /**
-     * FR-AUTH-04 #3-#5: menyimpan password baru dari tautan reset.
-     *
-     * Token diperiksa lebih dulu supaya kedaluwarsa bisa dibedakan dari
-     * token yang tidak dikenal; PasswordBroker yang membandingkan hash
-     * token dan menghapusnya setelah dipakai (sekali pakai).
+     * FR-AUTH-04 #3-#5: kedaluwarsa diperiksa lebih dulu supaya bisa dibedakan
+     * dari token yang tidak dikenal; PasswordBroker menghapus token setelah dipakai.
      */
     public function resetPassword(Request $request)
     {
@@ -370,36 +312,24 @@ class AuthController extends Controller
         return $this->keLogin('Password berhasil diubah, silakan login');
     }
 
-    /**
-     * Satu bentuk balasan untuk semua pembatas percobaan, supaya status dan
-     * pesan 429 tidak pernah berbeda antar endpoint.
-     */
+    /** Satu bentuk balasan 429 untuk semua pembatas percobaan. */
     private function terlaluBanyak(): JsonResponse
     {
         return response()->json(['message' => self::PESAN_TERLALU_BANYAK], 429);
     }
 
-    /**
-     * Tautan verifikasi ditolak di dua tempat: saat hash email tidak cocok dan
-     * saat token tidak cocok. Keduanya harus dijawab sama persis.
-     */
+    /** Hash email salah dan token salah harus dijawab sama persis. */
     private function tautanVerifikasiTidakValid(): JsonResponse
     {
         return response()->json(['message' => self::PESAN_TAUTAN_VERIFIKASI_TIDAK_VALID], 403);
     }
 
-    /**
-     * Tautan reset yang tidak dikenal dan yang sudah dipakai dijawab sama,
-     * supaya penebak tidak tahu apakah tokennya pernah ada.
-     */
+    /** Token tidak dikenal dan token sudah dipakai dijawab sama. */
     private function tautanResetTidakValid(): JsonResponse
     {
         return response()->json(['message' => self::PESAN_TAUTAN_RESET_TIDAK_VALID], 422);
     }
 
-    /**
-     * Balasan berhasil yang mengarahkan User ke halaman login.
-     */
     private function keLogin(string $pesan): JsonResponse
     {
         return response()->json([
@@ -408,11 +338,7 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * Email tidak membedakan huruf besar/kecil, jadi input disamakan lebih
-     * dulu sebelum validasi. Tanpa ini, aturan `unique` dan pencarian
-     * `where('email', ...)` memakai bentuk berbeda dari yang disimpan model.
-     */
+    /** Email tidak membedakan huruf besar/kecil, jadi disamakan sebelum validasi. */
     private function normalisasiEmail(Request $request): void
     {
         $email = $request->input('email');
@@ -423,12 +349,8 @@ class AuthController extends Controller
     }
 
     /**
-     * FR-AUTH-03 #2: kembali ke halaman yang diminta sebelum login.
-     *
-     * Nilai `url.intended` dibentuk dari URL request, termasuk header Host.
-     * Kalau host tujuannya berbeda dari APP_URL, permintaan diabaikan dan
-     * User diarahkan ke halaman utama, supaya login tidak bisa dipakai
-     * sebagai open redirect ke situs lain.
+     * FR-AUTH-03 #2: `url.intended` datang dari header Host, jadi host yang
+     * berbeda dari APP_URL diabaikan supaya login tidak jadi open redirect.
      */
     private function tujuanSetelahLogin(Request $request): string
     {

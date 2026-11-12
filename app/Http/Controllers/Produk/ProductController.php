@@ -13,25 +13,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * FR-PROD-01, UC-09: Admin Ecommerce mengelola produk jadi dan produk custom
- * beserta harga, berat, dan gambar (srs.md:414).
+ * FR-PROD-01, UC-09: Admin Ecommerce mengelola produk jadi dan custom.
  *
- * Dua aturan dokumen yang paling menentukan bentuk controller ini:
- *
- * 1. `srs.md:404` gambar produk hanya JPG/PNG maksimal 2 MB per file
- *    (NFR-FIL-01). Berkas pertama menjadi `products.gambar` — foto utama
- *    pada kartu katalog — dan sisanya masuk `product_images` sebagai galeri
- *    detail produk. Jumlah gambar tidak dibatasi dokumen.
- * 2. `user-story:222` produk custom harus dikaitkan dengan template desain.
- *    Template hidup di tabel `templates` dengan `product_id`, jadi template
- *    lahir SETELAH produk. Karena itu FR-PROD-01 tidak menerima template:
- *    produk custom dibuat Nonaktif dulu (`user-story:221` tetap terpenuhi
- *    untuk produk jadi), lalu diaktifkan saat template dan SLA sudah ada di
- *    modul Desain. Database sendiri menolak produk custom aktif tanpa SLA
- *    (`products_custom_aktif_check`).
- *
- * Stok tidak pernah disentuh di sini: varian dibuat berstok 0 dan angka stok
- * hanya diubah Admin SCM (srs.md:398, FR-SCM-01).
+ * Gambar: berkas pertama menjadi `products.gambar` (foto kartu katalog),
+ * sisanya galeri `product_images`. Produk custom baru selalu Nonaktif karena
+ * template (FR-CDSN-01) dan SLA (FR-CDSN-07) belum ada, dan database menolak
+ * custom aktif tanpa `sla_hari`. Stok tidak disentuh di sini (FR-SCM-01).
  */
 class ProductController extends Controller
 {
@@ -43,22 +30,14 @@ class ProductController extends Controller
 
     private const PESAN_STOK_MASIH_ADA = 'Produk masih memiliki stok pada salah satu varian, kosongkan stok terlebih dahulu';
 
-    /**
-     * Pesanan berstatus ini dianggap selesai, sehingga produknya boleh
-     * dihapus (FR-PROD-01 #5). Status lain berarti pesanan masih berjalan.
-     */
+    /** Status selain ini berarti pesanan masih berjalan (FR-PROD-01 #5). */
     private const STATUS_PESANAN_SELESAI = ['selesai', 'dibatalkan'];
 
     private const DISK = 'public';
 
     private const FOLDER = 'produk';
 
-    /**
-     * Daftar produk untuk halaman "Kelola Produk".
-     *
-     * `harga_mulai` mengikuti FR-KTLG-01 #5: harga termurah dari varian.
-     * Kalau produk belum punya varian, `harga_dasar` yang dipakai.
-     */
+    /** `harga_mulai` = harga varian termurah, atau `harga_dasar` bila belum ada varian. */
     public function daftar(): JsonResponse
     {
         $produk = Product::query()
@@ -72,9 +51,7 @@ class ProductController extends Controller
         return response()->json(['data' => $produk]);
     }
 
-    /**
-     * FR-PROD-01 #1, #2, #7: tambah produk beserta gambarnya.
-     */
+    /** FR-PROD-01 #1, #2, #7. */
     public function simpan(Request $request): JsonResponse
     {
         $data = $this->validasi($request);
@@ -93,9 +70,7 @@ class ProductController extends Controller
         ], 201);
     }
 
-    /**
-     * FR-PROD-01 #4, #6: ubah data produk atau ubah status Aktif/Nonaktif.
-     */
+    /** FR-PROD-01 #4, #6. */
     public function ubah(Request $request, int $id): JsonResponse
     {
         $produk = Product::with('images')->find($id);
@@ -119,18 +94,11 @@ class ProductController extends Controller
     }
 
     /**
-     * FR-PROD-01 #5: hapus produk. Pesanan lama tetap terbaca karena
-     * `order_items` menyimpan salinan nama produk, SKU, dan harga.
-     *
-     * Produk yang masih dipakai pesanan berjalan ditolak: menghapusnya akan
-     * melepas tautan varian dari pesanan yang belum selesai.
-     *
-     * Produk yang variannya masih berstok juga ditolak. `variants.product_id`
-     * dan `stock_movements.variant_id` sama-sama memakai ON DELETE CASCADE,
-     * jadi menghapus produk berstok akan membuang angka stok beserta seluruh
-     * kartu stoknya — padahal stok adalah wilayah Admin SCM. Aturan ini
-     * menyamakan penjagaan di VariantController::hapus supaya produk tidak
-     * bisa dipakai sebagai jalan pintas untuk melewatinya.
+     * FR-PROD-01 #5. Ditolak bila masih ada pesanan berjalan atau varian
+     * berstok: `variants` dan `stock_movements` memakai ON DELETE CASCADE,
+     * jadi menghapus produk berstok membuang angka stok dan kartu stoknya.
+     * Penjagaan ini menutup jalan pintas dari aturan yang sama di
+     * VariantController::hapus.
      */
     public function hapus(int $id): JsonResponse
     {
@@ -163,8 +131,6 @@ class ProductController extends Controller
 
         $berkas = $this->daftarBerkas($produk);
 
-        // Varian, gambar, dan baris keranjang ikut terhapus lewat ON DELETE
-        // CASCADE di migrasi masing-masing.
         $produk->delete();
 
         Storage::disk(self::DISK)->delete($berkas);
@@ -172,11 +138,7 @@ class ProductController extends Controller
         return response()->json(['message' => 'Produk berhasil dihapus']);
     }
 
-    /**
-     * Hapus satu foto galeri. Foto utama (`products.gambar`) tidak bisa
-     * dihapus lewat sini karena kartu katalog membutuhkannya; ganti foto
-     * utama dengan mengunggah gambar baru lewat ubah produk.
-     */
+    /** Foto utama tidak bisa dihapus dari sini karena kartu katalog memakainya. */
     public function hapusGambar(int $id, int $gambarId): JsonResponse
     {
         $produk = Product::find($id);
@@ -220,38 +182,24 @@ class ProductController extends Controller
         }
 
         $data = $request->validate([
-            // `exists` memastikan kategori benar-benar ada; FK di database
-            // tetap menjadi penjaga terakhir.
             'category_id' => ['required', 'integer', 'exists:categories,id'],
             'nama' => ['required', 'string', 'max:255'],
-            // Kolom `deskripsi` di migrasi products bertipe NOT NULL.
             'deskripsi' => ['required', 'string'],
             'tipe' => ['required', 'in:jadi,custom'],
             'harga_dasar' => ['required', 'integer', 'min:0'],
             'is_aktif' => ['sometimes', 'boolean'],
 
-            // Gambar tidak wajib. Bentuk array hanya dipakai kalau ada file
-            // yang diunggah, jadi produk boleh disimpan tanpa gambar.
             'gambar' => ['sometimes', 'array'],
-            // max:2048 dalam kilobyte = 2 MB (NFR-FIL-01).
+            // max:2048 kilobyte = 2 MB (NFR-FIL-01).
             'gambar.*' => ['file', 'mimes:jpg,jpeg,png', 'max:2048'],
         ]);
 
-        // `gambar` berisi objek UploadedFile, bukan kolom database. Kalau ikut
-        // diteruskan ke Product::create(), PDO mencoba menyimpan array dan
-        // gagal. Berkasnya ditangani simpanGambar().
+        // `gambar` berisi UploadedFile, bukan kolom database.
         unset($data['gambar']);
 
-        // Produk custom baru selalu lahir Nonaktif: template (FR-CDSN-01) dan
-        // SLA (FR-CDSN-07) belum ada, dan database menolak custom aktif tanpa
-        // `sla_hari`. Aktivasinya dilakukan di modul Desain.
-        //
-        // Aturan itu hanya untuk produk custom baru. Produk custom yang sudah
-        // aktif tetap aktif saat datanya diubah: memaksa Nonaktif di sini
-        // membuat Admin mematikan produk hanya karena memperbaiki nama atau
-        // harga. Pengecualiannya sempit — hanya saat produk yang diubah memang
-        // sudah custom dan sudah aktif — supaya mengubah produk jadi menjadi
-        // custom, atau mengaktifkan custom, tetap menghasilkan Nonaktif.
+        // Custom baru atau produk yang baru diubah menjadi custom tetap
+        // Nonaktif. Custom yang sudah aktif dibiarkan, supaya mengubah nama
+        // atau harganya tidak menurunkan produk dari katalog.
         $customYangSudahAktif = $produk?->tipe === 'custom' && $produk->is_aktif;
 
         if ($data['tipe'] === 'custom' && ! $customYangSudahAktif) {
@@ -262,9 +210,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Menyimpan berkas unggahan: file pertama menjadi foto utama, sisanya
-     * menjadi galeri berurutan. Foto utama lama dihapus hanya setelah berkas
-     * baru benar-benar tersimpan.
+     * Foto utama lama dihapus hanya setelah berkas baru tersimpan.
      *
      * @param  array<int, UploadedFile>  $berkas
      */
@@ -320,11 +266,8 @@ class ProductController extends Controller
             return null;
         }
 
-        // Facade Storage hanya menjanjikan kontrak `Filesystem`, sedangkan
-        // `url()` didefinisikan di kontrak `Cloud` dan di FilesystemAdapter
-        // yang dipakai disk `public`. Anotasi ini memberi tahu alat analisis
-        // statis (Intelephense/PHPStan) kelas konkret yang sebenarnya dipakai,
-        // tanpa mengubah perilaku saat berjalan.
+        // `url()` ada di kontrak Cloud/FilesystemAdapter, bukan di kontrak
+        // Filesystem yang dijanjikan facade Storage.
         /** @var FilesystemAdapter $disk */
         $disk = Storage::disk(self::DISK);
 
@@ -332,8 +275,6 @@ class ProductController extends Controller
     }
 
     /**
-     * Bentuk produk yang dikirim ke API.
-     *
      * @return array<string, mixed>
      */
     private function ringkas(Product $produk, bool $denganGaleri = false): array

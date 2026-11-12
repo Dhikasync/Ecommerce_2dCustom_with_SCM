@@ -11,18 +11,13 @@ use Illuminate\Http\Request;
 
 /**
  * FR-PROF-01 #4, #11, #12, UC-08: pencarian lokasi kecamatan/kelurahan.
- *
- * Endpoint ini hanya meneruskan kata kunci ke RajaOngkir lalu
- * menerjemahkan hasil atau kegagalannya menjadi respons yang ditetapkan
- * User Story. Aturan alamat (lokasi wajib dipilih, alamat tidak boleh
- * disimpan tanpa lokasi) diperiksa di endpoint alamat, bukan di sini.
+ * Aturan alamat diperiksa di AlamatController, bukan di sini.
  */
 class LokasiController extends Controller
 {
-    /** Pesan persis dari User Story FR-PROF-01 #11. */
     private const PESAN_TIDAK_DITEMUKAN = 'Lokasi tidak ditemukan, coba kata kunci lain';
 
-    /** Pesan contoh dari FR-PROF-01 #12; dokumen menulisnya dengan "misal". */
+    /** Pesan contoh FR-PROF-01 #12; dokumen menulisnya dengan "misal". */
     private const PESAN_GANGGUAN = 'Layanan lokasi sedang bermasalah, silakan coba lagi';
 
     public function cari(Request $request, RajaOngkir $rajaOngkir, LokasiDitawarkan $ditawarkan): JsonResponse
@@ -30,8 +25,8 @@ class LokasiController extends Controller
         $kataKunci = $request->query('search');
         $kataKunci = is_string($kataKunci) ? trim($kataKunci) : '';
 
-        // Dokumen tidak mengatur kata kunci kosong. Keputusan yang diambil:
-        // tidak memanggil API dan menjawab seperti "tidak ada hasil".
+        // Kata kunci kosong tidak diatur dokumen: API tidak dipanggil dan
+        // dijawab seperti "tidak ada hasil".
         if ($kataKunci === '') {
             return $this->tidakDitemukan();
         }
@@ -51,9 +46,8 @@ class LokasiController extends Controller
             return $this->tidakDitemukan();
         }
 
-        // Hasil yang baru dilihat User dicatat supaya endpoint alamat bisa
-        // memastikan lokasi yang dipilih memang berasal dari daftar ini
-        // (FR-PROF-01 #4: lokasi tidak dapat diketik bebas).
+        // Dicatat supaya AlamatController bisa memastikan lokasi yang dipilih
+        // memang berasal dari daftar ini (FR-PROF-01 #4).
         $ditawarkan->catat($lokasi);
 
         return response()->json([
