@@ -29,7 +29,7 @@ class KatalogTest extends TestCase
         $this->varian($produk, ['sku' => 'TOTE-M', 'harga' => 20000, 'moq' => 5]);
         $this->varian($produk, ['sku' => 'TOTE-S', 'harga' => 15000, 'moq' => 3, 'stok_fisik' => 5]);
 
-        $this->getJson('/katalog')
+        $respons = $this->getJson('/katalog')
             ->assertOk()
             ->assertJsonPath('data.0.nama', 'Tote Bag Kanvas')
             ->assertJsonPath('data.0.tipe', 'jadi')
@@ -43,7 +43,7 @@ class KatalogTest extends TestCase
 
         $this->assertStringContainsString(
             '/storage/produk/tote.jpg',
-            (string) $this->getJson('/katalog')->json('data.0.gambar_url'),
+            (string) $respons->json('data.0.gambar_url'),
         );
     }
 
@@ -53,6 +53,7 @@ class KatalogTest extends TestCase
             'nama' => 'Paper Bag Custom',
             'tipe' => 'custom',
             'is_aktif' => true,
+            // Constraint products_custom_aktif_check menolak custom aktif tanpa sla_hari.
             'sla_hari' => 3,
         ]);
 
@@ -102,9 +103,14 @@ class KatalogTest extends TestCase
     {
         $this->produk(['harga_dasar' => 40000]);
 
-        $this->getJson('/katalog')
-            ->assertJsonPath('data.0.harga_mulai', 40000)
-            ->assertJsonPath('data.0.moq', null);
+        $this->getJson('/katalog')->assertJsonPath('data.0.harga_mulai', 40000);
+    }
+
+    public function test_moq_kosong_bila_belum_ada_varian(): void
+    {
+        $this->produk();
+
+        $this->getJson('/katalog')->assertJsonPath('data.0.moq', null);
     }
 
     public function test_moq_kartu_adalah_yang_terkecil(): void

@@ -27,7 +27,7 @@ class KatalogController extends Controller
     {
         $produk = Product::query()
             ->where('is_aktif', true)
-            ->withCount(['variants', 'reviews'])
+            ->withCount('reviews')
             ->withAvg('reviews', 'rating')
             ->withMin('variants', 'harga')
             ->withMin('variants', 'moq')
@@ -35,12 +35,9 @@ class KatalogController extends Controller
             ->withExists(['variants as punya_stok' => fn ($query) => $query
                 ->whereRaw('stok_fisik - stok_direservasi > 0')])
             ->orderBy('nama')
-            ->paginate($this->perHalaman($request))
-            ->withQueryString();
+            ->paginate($this->perHalaman($request));
 
-        $data = collect($produk->items())
-            ->map(fn (Product $item) => $this->kartu($item))
-            ->values();
+        $data = array_map(fn (Product $item) => $this->kartu($item), $produk->items());
 
         $meta = [
             'current_page' => $produk->currentPage(),
@@ -50,7 +47,7 @@ class KatalogController extends Controller
         ];
 
         return response()->json(
-            $produk->total() === 0
+            $meta['total'] === 0
                 ? ['message' => self::PESAN_KOSONG, 'data' => $data, 'meta' => $meta]
                 : ['data' => $data, 'meta' => $meta]
         );
@@ -83,7 +80,7 @@ class KatalogController extends Controller
             'status_stok' => $produk->punya_stok ? 'tersedia' : 'habis',
             'rating' => $produk->reviews_avg_rating === null
                 ? null
-                : round((float) $produk->reviews_avg_rating, 2),
+                : (float) $produk->reviews_avg_rating,
             'jumlah_ulasan' => $produk->reviews_count,
         ];
     }
