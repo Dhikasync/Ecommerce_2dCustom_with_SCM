@@ -66,7 +66,9 @@ app/
 │       └── ResetPasswordMail.php        # email reset password bertoken
 ├── Rules/NomorTelepon.php               # format nomor telepon +62 (dipakai auth + profil)
 ├── Services/
-│   └── Profil/RajaOngkir.php            # client pencarian lokasi
+│   └── Profil/
+│       ├── LokasiDitawarkan.php         # ingatan hasil pencarian lokasi (24 jam)
+│       └── RajaOngkir.php               # client pencarian lokasi
 └── Models/
     ├── Auth/
     │   └── User.php                     # model modul auth (27 model total sesuai skema SRS)
@@ -137,7 +139,7 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **268 test lulus, 928 assertion** (dijalankan lokal dan otomatis di CI).
+Status terakhir: **273 test lulus, 944 assertion** (dijalankan lokal dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
@@ -175,13 +177,13 @@ Semua route dipisah per modul di `routes/*.php` dan memakai session guard. Respo
 | POST | `/forgot-password` | `password.email` | `guest`, throttle 6/menit | FR-AUTH-04 |
 | GET | `/reset-password/{token}` | `password.reset` | `guest` | Halaman password baru |
 | POST | `/reset-password` | `password.store` | `guest` | Simpan password baru (sekali pakai, 24 jam) |
-| GET | `/lokasi?search=` | `lokasi.cari` | `auth`, `active`, throttle 30/menit | FR-PROF-01 #4/#11/#12, UC-08 — cari kecamatan/kelurahan lewat RajaOngkir |
+| GET | `/lokasi?search=` | `lokasi.cari` | `auth`, `active`, throttle 30/menit | FR-PROF-01 #4/#11/#12, UC-08 — cari kecamatan/kelurahan lewat RajaOngkir; hasilnya diingat 24 jam sebagai lokasi yang boleh dipilih |
 | GET | `/profil` | `profil.tampil` | `auth`, `active` | FR-PROF-01 #1 — nama, email, nomor telepon, foto profil (jika ada) |
 | PUT | `/profil` | `profil.ubah` | `auth`, `active` | FR-PROF-01 #2/#3/#10 — ubah nama dan nomor telepon |
 | PUT | `/profil/password` | `profil.password.ubah` | `auth`, `active`, throttle 6/menit | FR-PROF-01 #9 — ubah password dengan verifikasi password lama |
 | GET | `/profil/alamat` | `alamat.index` | `auth`, `active` | FR-PROF-01 #1 — daftar alamat milik sendiri (utama lebih dulu) |
-| POST | `/profil/alamat` | `alamat.store` | `auth`, `active` | FR-PROF-01 #4 — tambah alamat dengan lokasi hasil pencarian |
-| PUT | `/profil/alamat/{id}` | `alamat.update` | `auth`, `active` | FR-PROF-01 #5 — ubah alamat |
+| POST | `/profil/alamat` | `alamat.store` | `auth`, `active` | FR-PROF-01 #4 — tambah alamat; `kode_lokasi` wajib berasal dari hasil `/lokasi`, label diambil dari server |
+| PUT | `/profil/alamat/{id}` | `alamat.update` | `auth`, `active` | FR-PROF-01 #5 — ubah alamat dengan aturan lokasi yang sama |
 | DELETE | `/profil/alamat/{id}` | `alamat.destroy` | `auth`, `active` | FR-PROF-01 #6 — hapus alamat (hanya jika tersisa lebih dari satu) |
 | PUT | `/profil/alamat/{id}/utama` | `alamat.utama` | `auth`, `active` | FR-PROF-01 #7 — tandai alamat utama |
 | PUT | `/profil/email` | `profil.email.ajukan` | `auth`, `active`, throttle 6/menit | FR-PROF-01 #8 — ajukan email baru; email lama tetap berlaku |
@@ -216,7 +218,8 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Hapus alamat terakhir ditolak** (`"Minimal satu alamat harus tetap tersimpan"`). Skenario #6 memang hanya berlaku saat User punya lebih dari satu alamat.
 - **Pesan validasi Bahasa Indonesia**: `.env` sudah memakai `APP_LOCALE=id`, tetapi Laravel tidak menyediakan terjemahan Indonesia, jadi tanpa folder `lang/` pesan yang keluar tetap bahasa Inggris dari vendor. `lang/id/validation.php` memuat seluruh key bawaan Laravel 13, dan `validation.custom` menyimpan pesan yang **ditetapkan dokumen** (`"Format email tidak valid"`, `"Email sudah digunakan"`, `"Konfirmasi password tidak sesuai"`, `"Password minimal 8 karakter"`) supaya sama persis di semua endpoint. Pesan format/ukuran gambar produk (`"Format gambar harus JPG atau PNG"`, `"Ukuran gambar maksimal 2 MB"`) mengikuti NFR-FIL-01; User Story hanya meminta "pesan error format/ukuran file yang didukung". `tests/Feature/PesanValidasiTest.php` menjaga kelengkapan: setiap key bawaan Laravel harus punya terjemahan dan tidak boleh ada yang masih sama dengan teks Inggris.
 - **Jebakan wildcard pesan ukuran**: Laravel menambahkan tipe nilai di belakang key pesan untuk aturan `max`/`min`/`size` (misalnya `gambar.0.max.file`), sehingga custom message `gambar.*.file` ikut menangkap pencarian itu dan pesan ukuran berubah menjadi pesan tipe berkas. Karena itu `gambar.*.file` sengaja tidak didefinisikan; pesan untuk aturan `file` sudah sama dari `validation.file` + `attributes`.
-- **Pesan validasi alamat**: dokumen hanya menetapkan pesan format nomor telepon. Pesan `"Nama penerima wajib diisi"`, `"Nomor telepon wajib diisi"`, `"Alamat lengkap wajib diisi"`, dan `"Lokasi wajib dipilih"` mengikuti pola `"Nama wajib diisi"` (#10).
+- **Pesan validasi alamat**: dokumen hanya menetapkan pesan format nomor telepon. Pesan `"Nama penerima wajib diisi"`, `"Nomor telepon wajib diisi"`, `"Alamat lengkap wajib diisi"`, dan `"Lokasi wajib dipilih"` mengikuti pola `"Nama wajib diisi"` (#10). `"Lokasi wajib dipilih"` kini hanya untuk `kode_lokasi` yang kosong; `label_lokasi` tidak lagi wajib dikirim karena nilainya selalu diambil dari hasil pencarian.
+- **Lokasi alamat harus berasal dari hasil pencarian (#4, #5, srs.md:174)**: pencarian terjadi di `GET /lokasi` dan penyimpanan di `POST/PUT /profil/alamat`, dua permintaan berbeda, sehingga hasil pencarian dicatat oleh `App\Services\Profil\LokasiDitawarkan` ke cache (`lokasi-ditawarkan:{kode}`, 24 jam — dokumen tidak mengatur masanya). Endpoint alamat hanya menerima kode yang ada di catatan itu; cache dipakai, bukan tabel baru, karena SRS tidak memuat tabel lokasi. `label_lokasi` kiriman klien **tidak dipakai**: label selalu versi server, supaya alamat tidak bisa diisi tulisan bebas walau kodenya sah. Kode yang tidak dikenal dijawab `422` dengan pesan dokumen #11, `"Lokasi tidak ditemukan, coba kata kunci lain"`, karena User memang harus mencari ulang. Pengecualian: pasangan kode+label yang sudah tersimpan di alamat itu tetap diterima walau tawarannya kedaluwarsa, supaya mengubah alamat lama tidak memaksa memilih lokasi lagi (#5 hanya menyebut "bila perlu"). Konsekuensi yang diterima: menghapus cache memaksa User memilih ulang lokasi sebelum menyimpan alamat baru.
 - **Alamat milik User lain dijawab `404`** (`"Alamat tidak ditemukan"`), bukan `403`, supaya keberadaan alamat orang lain tidak terbuka (NFR-SEC-03).
 - **Produk custom selalu lahir Nonaktif (FR-PROD-01 #7)**: `user-story:222` meminta produk custom dikaitkan ke template desain, tetapi `templates.product_id` membuat template baru bisa ada **setelah** produknya. Database juga menolak produk custom aktif tanpa `sla_hari` (`products_custom_aktif_check`). Karena itu form produk tidak menerima template/SLA; aktivasi produk custom menunggu FR-CDSN-01 (template) dan FR-CDSN-07 (SLA).
 - **Aturan Nonaktif hanya untuk custom baru, bukan custom yang sudah aktif**: `ProductController::validasi()` menerima produk yang sedang diubah supaya bisa membedakan keduanya. Tanpa itu, memperbaiki nama atau harga produk custom yang sudah aktif akan mematikannya. Pengecualiannya sempit: hanya produk yang **sudah** custom **dan sudah** aktif. Mengubah produk jadi menjadi custom, atau mengaktifkan custom lewat form, tetap menghasilkan Nonaktif — memaksa Nonaktif pada custom aktif justru akan membuat Admin tidak bisa memperbaiki datanya tanpa menurunkan produk dari katalog.

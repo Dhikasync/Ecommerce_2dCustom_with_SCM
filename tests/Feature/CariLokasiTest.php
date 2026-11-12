@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Auth\User;
+use App\Services\Profil\LokasiDitawarkan;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
@@ -92,6 +93,26 @@ class CariLokasiTest extends TestCase
             return $request->url() === self::URL_DASAR.'/destination/domestic-destination?search=bandung'
                 && $request->hasHeader('key', 'kunci-uji');
         });
+    }
+
+    /**
+     * FR-PROF-01 #4: hasil pencarian harus diingat supaya endpoint alamat bisa
+     * memastikan lokasi yang dipilih memang berasal dari daftar ini. Tanpa
+     * ingatan itu, alamat hanya bisa memeriksa "kode terisi" dan lokasi
+     * karangan klien ikut tersimpan.
+     */
+    public function test_hasil_pencarian_diingat_untuk_penyimpanan_alamat(): void
+    {
+        Http::fake(['*' => Http::response($this->responsLokasi())]);
+
+        $this->actingAs(User::factory()->create())
+            ->getJson('/lokasi?search=bandung')
+            ->assertOk();
+
+        $this->assertSame(
+            '-, BANDUNG, BANDUNG, JAWA BARAT, 40614',
+            app(LokasiDitawarkan::class)->label('4816'),
+        );
     }
 
     public function test_kata_kunci_dirapikan_sebelum_dikirim(): void

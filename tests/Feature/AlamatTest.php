@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\Auth\User;
 use App\Models\Order;
 use App\Models\Profil\Address;
+use App\Services\Profil\LokasiDitawarkan;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
@@ -22,6 +24,12 @@ use Tests\TestCase;
  * - alamat pertama otomatis menjadi utama,
  * - menghapus alamat utama mempromosikan alamat lain yang paling lama,
  * - teks pesan validasi (dokumen hanya menetapkan pesan nomor telepon).
+ *
+ * Aturan lokasi (#4, #5): `kode_lokasi` hanya diterima kalau kode itu pernah
+ * muncul di hasil pencarian, dan `label_lokasi` diambil dari hasil pencarian
+ * itu. Test yang menyimpan alamat lewat endpoint karena itu mencatat dulu
+ * tawarannya lewat `tawarkanLokasi()`; alamat yang dibuat langsung lewat model
+ * tidak terpengaruh karena tidak melewati validasi.
  */
 class AlamatTest extends TestCase
 {
@@ -30,6 +38,17 @@ class AlamatTest extends TestCase
     private function pengguna(array $atribut = []): User
     {
         return User::factory()->create($atribut);
+    }
+
+    /**
+     * Meniru hasil GET /lokasi: kode ini sekarang boleh dipakai menyimpan
+     * alamat, dengan label yang ditentukan server.
+     */
+    private function tawarkanLokasi(string $kode = '1140', string $label = 'AIRLANGGA, GUBENG, SURABAYA, JAWA TIMUR, 60286'): void
+    {
+        app(LokasiDitawarkan::class)->catat([
+            ['kode_lokasi' => $kode, 'label_lokasi' => $label],
+        ]);
     }
 
     private function payload(array $ganti = []): array
@@ -88,6 +107,7 @@ class AlamatTest extends TestCase
 
     public function test_alamat_pertama_berhasil_ditambahkan_dan_menjadi_utama(): void
     {
+        $this->tawarkanLokasi();
         $user = $this->pengguna();
 
         $this->actingAs($user)
@@ -107,6 +127,8 @@ class AlamatTest extends TestCase
 
     public function test_alamat_kedua_tidak_otomatis_menjadi_utama(): void
     {
+        $this->tawarkanLokasi();
+        $this->tawarkanLokasi('2274', 'KETABANG, GENTENG, SURABAYA, JAWA TIMUR, 60272');
         $user = $this->pengguna();
 
         $this->actingAs($user)->postJson('/profil/alamat', $this->payload())->assertStatus(201);
@@ -165,6 +187,104 @@ class AlamatTest extends TestCase
         $this->assertDatabaseCount('addresses', 0);
     }
 
+    /**
+     * Skenario #4: "Lokasi tidak dapat diketik bebas; hanya lokasi dari daftar
+     * hasil yang dapat dipilih". Kode yang tidak pernah muncul di GET /lokasi
+     * berarti dikarang klien, jadi harus ditolak sebelum tersimpan.
+     */
+    public function test_kode_lokasi_yang_tidak_pernah_ditawarkan_ditolak(): void
+    {
+        $this->actingAs($this->pengguna())
+            ->postJson('/profil/alamat', $this->payload([
+                'kode_lokasi' => '999999',
+                'label_lokasi' => 'LOKASI KARANGAN, SURABAYA',
+            ]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['kode_lokasi' => 'Lokasi tidak ditemukan, coba kata kunci lain']);
+
+        $this->assertDatabaseCount('addresses', 0);
+    }
+
+    /**
+     * Label yang tampil di daftar alamat dan disalin ke pesanan harus berasal
+     * dari RajaOngkir, bukan dari klien — kalau tidak, alamat bisa berisi
+     * tulisan bebas meski kodenya sah.
+     */
+    public function test_label_lokasi_dari_klien_diganti_label_hasil_pencarian(): void
+    {
+        $this->tawarkanLokasi();
+
+        $this->actingAs($this->pengguna())
+            ->postJson('/profil/alamat', $this->payload(['label_lokasi' => 'ALAMAT KARANGAN']))
+            ->assertStatus(201)
+            ->assertJsonPath('data.label_lokasi', 'AIRLANGGA, GUBENG, SURABAYA, JAWA TIMUR, 60286');
+
+        $this->assertDatabaseHas('addresses', [
+            'kode_lokasi' => '1140',
+            'label_lokasi' => 'AIRLANGGA, GUBENG, SURABAYA, JAWA TIMUR, 60286',
+        ]);
+    }
+
+    /**
+     * Rantai lengkap tanpa mencatat tawaran secara manual: hasil GET /lokasi
+     * yang benar-benar dikirim ke browser langsung dipakai menyimpan alamat.
+     */
+    public function test_hasil_pencarian_lokasi_dapat_langsung_dipakai_menyimpan_alamat(): void
+    {
+        config([
+            'services.rajaongkir.key' => 'kunci-uji',
+            'services.rajaongkir.base_url' => 'https://rajaongkir.komerce.id/api/v1',
+        ]);
+
+        Http::fake(['*' => Http::response([
+            'meta' => ['status' => 'success'],
+            'data' => [[
+                'id' => 4816,
+                'label' => '-, BANDUNG, BANDUNG, JAWA BARAT, 40614',
+            ]],
+        ])]);
+
+        $user = $this->pengguna();
+
+        $this->actingAs($user)
+            ->getJson('/lokasi?search=bandung')
+            ->assertOk()
+            ->assertJsonPath('data.0.kode_lokasi', '4816');
+
+        $this->actingAs($user)
+            ->postJson('/profil/alamat', $this->payload([
+                'kode_lokasi' => '4816',
+                'label_lokasi' => '-, BANDUNG, BANDUNG, JAWA BARAT, 40614',
+            ]))
+            ->assertStatus(201);
+
+        $this->assertDatabaseHas('addresses', [
+            'user_id' => $user->getKey(),
+            'kode_lokasi' => '4816',
+            'label_lokasi' => '-, BANDUNG, BANDUNG, JAWA BARAT, 40614',
+        ]);
+    }
+
+    /**
+     * Skenario #5 hanya meminta User memilih ulang lokasi "bila perlu". Kode
+     * lokasi yang sudah tersimpan di alamat itu tetap sah walau tawaran
+     * pencariannya sudah kedaluwarsa, supaya mengubah alamat lama tidak
+     * memaksa pencarian ulang.
+     */
+    public function test_alamat_tersimpan_tetap_bisa_diubah_setelah_tawaran_lokasi_hilang(): void
+    {
+        $user = $this->pengguna();
+        $alamat = Address::create($this->payload() + ['user_id' => $user->getKey(), 'is_utama' => true]);
+
+        $this->actingAs($user)
+            ->putJson("/profil/alamat/{$alamat->getKey()}", $this->payload([
+                'alamat_lengkap' => 'Jl. Dharmawangsa No. 5',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.alamat_lengkap', 'Jl. Dharmawangsa No. 5')
+            ->assertJsonPath('data.label_lokasi', 'AIRLANGGA, GUBENG, SURABAYA, JAWA TIMUR, 60286');
+    }
+
     public function test_daftar_alamat_hanya_milik_sendiri(): void
     {
         $user = $this->pengguna();
@@ -196,6 +316,7 @@ class AlamatTest extends TestCase
 
     public function test_ubah_alamat_berhasil(): void
     {
+        $this->tawarkanLokasi();
         $user = $this->pengguna();
         $alamat = Address::create($this->payload() + ['user_id' => $user->getKey(), 'is_utama' => true]);
 
@@ -356,6 +477,7 @@ class AlamatTest extends TestCase
 
     public function test_is_utama_tidak_bisa_diubah_lewat_ubah_alamat(): void
     {
+        $this->tawarkanLokasi();
         $user = $this->pengguna();
 
         $utama = Address::create($this->payload() + ['user_id' => $user->getKey(), 'is_utama' => true]);

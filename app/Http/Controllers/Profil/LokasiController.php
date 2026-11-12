@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Profil;
 
 use App\Exceptions\Profil\RajaOngkirException;
 use App\Http\Controllers\Controller;
+use App\Services\Profil\LokasiDitawarkan;
 use App\Services\Profil\RajaOngkir;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +25,7 @@ class LokasiController extends Controller
     /** Pesan contoh dari FR-PROF-01 #12; dokumen menulisnya dengan "misal". */
     private const PESAN_GANGGUAN = 'Layanan lokasi sedang bermasalah, silakan coba lagi';
 
-    public function cari(Request $request, RajaOngkir $rajaOngkir): JsonResponse
+    public function cari(Request $request, RajaOngkir $rajaOngkir, LokasiDitawarkan $ditawarkan): JsonResponse
     {
         $kataKunci = $request->query('search');
         $kataKunci = is_string($kataKunci) ? trim($kataKunci) : '';
@@ -49,6 +50,11 @@ class LokasiController extends Controller
         if ($lokasi === []) {
             return $this->tidakDitemukan();
         }
+
+        // Hasil yang baru dilihat User dicatat supaya endpoint alamat bisa
+        // memastikan lokasi yang dipilih memang berasal dari daftar ini
+        // (FR-PROF-01 #4: lokasi tidak dapat diketik bebas).
+        $ditawarkan->catat($lokasi);
 
         return response()->json([
             'data' => $lokasi,
