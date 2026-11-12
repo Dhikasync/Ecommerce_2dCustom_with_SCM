@@ -8,13 +8,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-CKOT-01 item pesanan, FR-CDSN-06 SLA per item,
-     * FR-PROD-01 #5 riwayat pesanan tetap tersimpan setelah produk dihapus.
-     *
-     * Nama produk, nama varian, SKU, dan harga disalin saat checkout sehingga
-     * produk/varian boleh dihapus tanpa mengubah isi pesanan lama.
+     * FR-CKOT-01, FR-CDSN-06, FR-PROD-01 #5. Nama varian/SKU/harga disalin saat
+     * checkout sehingga produk boleh dihapus tanpa mengubah pesanan lama.
      */
     public function up(): void
     {
@@ -41,9 +36,6 @@ return new class extends Migration
         DB::statement('alter table order_items add constraint order_items_sla_hari_check check (sla_hari is null or sla_hari > 0)');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('order_items');

@@ -8,14 +8,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-CKOT-01 Proses Checkout, FR-PAYM-01/02 batas bayar 24 jam,
-     * FR-ORDR-01 s.d. FR-ORDR-04 status, resi, dan pengiriman,
-     * FR-SYS-01 proses otomatis berbasis waktu.
-     *
-     * Alamat pengiriman disalin ke pesanan supaya FR-PROF-01 #6 (User menghapus
-     * alamat) tetap berjalan tanpa merusak riwayat pesanan.
+     * FR-CKOT-01, FR-PAYM-01/02, FR-ORDR-01 s.d. FR-ORDR-04.
+     * Alamat disalin ke pesanan agar alamat tetap boleh dihapus (FR-PROF-01 #6).
      */
     public function up(): void
     {
@@ -66,9 +60,6 @@ return new class extends Migration
         DB::statement('alter table orders add constraint orders_nomor_resi_check check (nomor_resi is null or nomor_resi <> \'\')');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('orders');

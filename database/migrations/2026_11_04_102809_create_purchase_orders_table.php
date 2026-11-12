@@ -8,11 +8,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-SCM-03 Restock Barang (Purchase Order): PO berisi item, total biaya,
-     * tanggal, status, dan alasan pembatalan.
-     * FR-SCM-04 #3 catatan komunikasi disimpan sebagai bagian histori PO.
+     * FR-SCM-03, FR-SCM-04 #3: PO berisi item, total biaya, status, dan catatan
+     * komunikasi sebagai bagian histori.
      */
     public function up(): void
     {
@@ -34,9 +31,6 @@ return new class extends Migration
         DB::statement('alter table purchase_orders add constraint purchase_orders_total_biaya_check check (total_biaya >= 0)');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('purchase_orders');

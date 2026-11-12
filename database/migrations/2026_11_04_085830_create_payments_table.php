@@ -8,18 +8,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-PAYM-01/02 pembayaran lewat payment gateway, FR-PAYM-01 #3 User dapat
-     * mencoba ulang setelah Gagal, FR-PAYM-01 #4 batas bayar 24 jam,
-     * FR-PAYM-04 #2 refund atas pembatalan yang disetujui.
-     *
-     * Satu pesanan dapat memiliki beberapa percobaan pembayaran; status
-     * pembayaran pesanan mengikuti percobaan terakhir. Tidak ada bukti transfer
-     * manual: pembayaran hanya lewat gateway.
-     *
-     * Yang dibatasi database hanyalah baris 'lunas': percobaan boleh gagal
-     * berkali-kali, tetapi pembayaran yang diterima hanya satu per pesanan.
+     * FR-PAYM-01/02, FR-PAYM-01 #3/#4, FR-PAYM-04 #2. Percobaan bayar boleh
+     * berulang, tetapi hanya satu baris 'lunas' per pesanan (index parsial).
      */
     public function up(): void
     {
@@ -45,16 +35,11 @@ return new class extends Migration
         DB::statement('alter table payments add constraint payments_jumlah_check check (jumlah >= 0)');
         DB::statement('alter table payments add constraint payments_jumlah_dikembalikan_check check (jumlah_dikembalikan is null or jumlah_dikembalikan >= 0)');
 
-        // Lampiran A (Status Pembayaran): Lunas adalah pembayaran yang diterima,
-        // dan satu pesanan hanya menerima pembayaran satu kali. Percobaan yang
-        // gagal boleh berulang (FR-PAYM-01 #3), karena itu index ini parsial:
-        // hanya baris 'lunas' yang dibatasi, bukan seluruh order_id.
+        // Lampiran A: satu pesanan hanya menerima satu pembayaran, jadi index
+        // ini parsial pada baris 'lunas', bukan seluruh order_id.
         DB::statement("create unique index payments_lunas_unique on payments (order_id) where status = 'lunas'");
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('payments');

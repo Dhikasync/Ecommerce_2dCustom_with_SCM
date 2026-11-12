@@ -8,11 +8,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-PROD-01 #3 varian (SKU), FR-PROD-03 MOQ per varian,
-     * FR-SCM-01 stok per varian, FR-SCM-02 #1 Stok Minimum (reorder point).
-     * Stok Tersedia = stok_fisik - stok_direservasi tidak pernah disimpan.
+     * FR-PROD-01 #3, FR-PROD-03, FR-SCM-01, FR-SCM-02 #1. Stok Tersedia =
+     * stok_fisik - stok_direservasi tidak pernah disimpan sebagai kolom.
      */
     public function up(): void
     {
@@ -42,9 +39,6 @@ return new class extends Migration
         DB::statement('alter table variants add constraint variants_stok_minimum_check check (stok_minimum >= 0)');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('variants');

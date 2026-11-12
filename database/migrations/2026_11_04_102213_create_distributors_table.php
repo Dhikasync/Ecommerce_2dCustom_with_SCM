@@ -7,13 +7,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-SCM-04 #2: data distributor hanyalah buku kontak yang diisi Admin SCM.
-     * Distributor bukan aktor dan tidak memiliki akun atau akses sistem
-     * (SRS 1.4, AS-06). Kolomnya hanya yang disebut dokumen: nama toko dan
-     * nomor WhatsApp. Daftar varian yang biasa disuplai ada di tabel
-     * distributor_variants.
+     * FR-SCM-04 #2: buku kontak restock. Distributor bukan aktor (SRS 1.4, AS-06)
+     * dan tanpa akun; daftar variannya di distributor_variants.
      */
     public function up(): void
     {
@@ -25,9 +20,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('distributors');

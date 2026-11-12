@@ -8,13 +8,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-ORDR-02 #2: User mengajukan pembatalan untuk pesanan yang sudah Lunas.
-     * FR-ORDR-06: Admin Ecommerce menyetujui (dengan pilihan stok dikembalikan
-     * atau tidak) atau menolak dengan alasan wajib.
-     *
-     * Status mengikuti Lampiran A: Menunggu Persetujuan, Disetujui, Ditolak.
+     * FR-ORDR-02 #2: User mengajukan setelah Lunas. FR-ORDR-06: Admin
+     * memutuskan. Status mengikuti Lampiran A.
      */
     public function up(): void
     {
@@ -36,9 +31,8 @@ return new class extends Migration
             $table->index('status');
         });
 
-        // FR-ORDR-06 #6: satu pesanan hanya boleh punya satu permohonan yang
-        // masih menunggu persetujuan. Partial unique karena permohonan lama
-        // yang sudah diputuskan tetap tersimpan sebagai riwayat.
+        // FR-ORDR-06 #6: parsial, karena permohonan yang sudah diputuskan tetap
+        // tersimpan sebagai riwayat.
         DB::statement(
             'create unique index cancellation_requests_pending_unique '
             .'on cancellation_requests (order_id) where status = \'menunggu_persetujuan\''
@@ -63,9 +57,6 @@ return new class extends Migration
         );
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('cancellation_requests');

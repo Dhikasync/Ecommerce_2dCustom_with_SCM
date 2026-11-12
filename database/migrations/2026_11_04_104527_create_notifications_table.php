@@ -7,11 +7,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-ORDR-01 #3 notifikasi perubahan status (email dan in-app),
-     * FR-SCM-02 #2/#3 notifikasi stok menipis dan stok habis.
-     * Admin juga User, sehingga notifikasi Admin memakai tabel yang sama.
+     * FR-ORDR-01 #3, FR-SCM-02 #2/#3. Admin juga User, jadi satu tabel untuk semua.
      */
     public function up(): void
     {
@@ -29,9 +25,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('notifications');

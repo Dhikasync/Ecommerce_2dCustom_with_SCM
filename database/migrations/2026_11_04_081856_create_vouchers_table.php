@@ -8,11 +8,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-CKOT-02 Kupon/Voucher Diskon dan FR-CKOT-03 #3 validasi isian voucher:
-     * persentase maksimal 100, nominal harus lebih dari 0, periode harus valid.
-     * Pemakaian per User dihitung dari orders.voucher_id, bukan disimpan ganda.
+     * FR-CKOT-02, FR-CKOT-03 #3. Pemakaian per User dihitung dari
+     * `orders.voucher_id`, bukan disimpan ganda di sini.
      */
     public function up(): void
     {
@@ -41,9 +38,6 @@ return new class extends Migration
         DB::statement('alter table vouchers add constraint vouchers_periode_check check (tanggal_berakhir >= tanggal_mulai)');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('vouchers');

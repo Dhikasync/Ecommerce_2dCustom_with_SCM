@@ -8,11 +8,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-KTLG-02 #1 dan SRS 4.4.2: halaman detail produk menampilkan galeri
-     * gambar, sehingga satu produk dapat memiliki banyak foto. `products.gambar`
-     * tetap dipakai sebagai foto utama pada kartu katalog.
+     * FR-KTLG-02 #1, SRS 4.4.2: satu produk banyak foto; `products.gambar` tetap
+     * foto utama kartu katalog.
      */
     public function up(): void
     {
@@ -30,9 +27,6 @@ return new class extends Migration
         DB::statement('alter table product_images add constraint product_images_urutan_check check (urutan >= 0)');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('product_images');

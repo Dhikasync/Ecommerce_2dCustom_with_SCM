@@ -8,10 +8,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-SCM-03 #4 barang masuk dicatat berdasarkan jumlah aktual yang diterima,
-     * beserta catatan selisih bila berbeda dari PO.
+     * FR-SCM-03 #4: jumlah aktual yang diterima, tanggal, dan catatan selisih
+     * bila berbeda dari PO.
      */
     public function up(): void
     {
@@ -29,9 +27,6 @@ return new class extends Migration
         DB::statement('alter table goods_receipts add constraint goods_receipts_jumlah_check check (jumlah_diterima >= 0)');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('goods_receipts');
