@@ -8,11 +8,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-PROF-01 #4/#5: alamat hanya boleh disimpan dengan lokasi terpilih
-     * (kode lokasi menghitung ongkir, label lokasi ditampilkan lengkap).
-     * FR-PROF-01 #7: hanya satu alamat utama per User.
+     * FR-PROF-01 #4/#5 (lokasi terpilih, dipakai menghitung ongkir),
+     * FR-PROF-01 #7 (satu alamat utama per User, lewat index parsial di bawah).
      */
     public function up(): void
     {
@@ -33,9 +30,6 @@ return new class extends Migration
         DB::statement('create unique index addresses_utama_unique on addresses (user_id) where is_utama');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('addresses');

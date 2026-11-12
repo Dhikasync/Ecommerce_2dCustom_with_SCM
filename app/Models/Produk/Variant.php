@@ -36,10 +36,7 @@ class Variant extends Model
         'stok_minimum' => 'integer',
     ];
 
-    /**
-     * FR-SCM-01: stok per varian/SKU. Stok Tersedia selalu dihitung,
-     * tidak pernah disimpan sebagai kolom tersendiri.
-     */
+    /** FR-SCM-01: Tersedia selalu dihitung, tidak pernah disimpan. */
     protected function stokTersedia(): Attribute
     {
         return Attribute::get(
@@ -77,9 +74,7 @@ class Variant extends Model
         return $this->hasMany(PurchaseOrderItem::class);
     }
 
-    /**
-     * FR-SCM-04 #2: distributor yang biasa menyuplai varian ini.
-     */
+    /** FR-SCM-04 #2. */
     public function distributors()
     {
         return $this->belongsToMany(Distributor::class, 'distributor_variants')->withTimestamps();

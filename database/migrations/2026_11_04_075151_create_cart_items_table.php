@@ -8,12 +8,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-CART-01 #2: menambah item yang sama menambah quantity, bukan baris baru.
-     * Item produk jadi tidak punya design_id; item custom selalu punya design_id.
-     * Dua partial unique index dipakai karena PostgreSQL menganggap NULL berbeda
-     * pada unique index biasa.
+     * FR-CART-01 #2. Dua partial unique index karena PostgreSQL menganggap NULL
+     * berbeda; item custom memakai design_id, item jadi tidak.
      */
     public function up(): void
     {
@@ -37,9 +33,6 @@ return new class extends Migration
         DB::statement('alter table cart_items add constraint cart_items_harga_satuan_check check (harga_satuan >= 0)');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('cart_items');

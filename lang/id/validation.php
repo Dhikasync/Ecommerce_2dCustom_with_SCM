@@ -5,18 +5,9 @@
 | Pesan Validasi
 |--------------------------------------------------------------------------
 |
-| Pesan bawaan Laravel berbahasa Inggris. Aplikasi ini memakai
-| APP_LOCALE=id (config/app.php), jadi seluruh pesan yang mungkin muncul
-| diterjemahkan di sini supaya tidak ada pesan Inggris yang bocor ke User.
-|
-| Daftar key mengikuti vendor/laravel/framework/src/Illuminate/Translation/
-| lang/en/validation.php. Kalau Laravel menambah key baru, pesan yang belum
-| diterjemahkan akan jatuh ke bahasa Inggris sampai key-nya ditambahkan.
-|
-| `custom` dipakai untuk pesan yang ditetapkan dokumen (User Story v1.1.4):
-| FR-AUTH-02 #2-#5, FR-PROF-01 #3, dan format gambar NFR-FIL-01. Pesan di
-| sini berlaku untuk semua endpoint, sehingga pesan yang sama tidak perlu
-| ditulis ulang di setiap controller.
+| APP_LOCALE=id, jadi semua pesan yang mungkin muncul diterjemahkan di sini
+| agar tidak ada pesan Inggris yang bocor ke User. Daftar key mengikuti
+| lang/en/validation.php milik framework; key baru otomatis jatuh ke Inggris.
 |
 */
 
@@ -183,9 +174,8 @@ return [
     | Pesan Khusus Per Field
     |--------------------------------------------------------------------------
     |
-    | Pesan di sini menimpa pesan umum di atas untuk field tertentu. Semua
-    | pesan yang ditetapkan dokumen dikumpulkan di sini supaya cukup diubah
-    | di satu tempat.
+    | Menimpa pesan umum di atas untuk field tertentu. Pesan yang ditetapkan
+    | dokumen dikumpulkan di sini agar cukup diubah di satu tempat.
     |
     */
 
@@ -202,16 +192,8 @@ return [
             // User Story FR-AUTH-02 #5, batas minimum ditetapkan 8 karakter.
             'min' => 'Password minimal 8 karakter',
         ],
-        // FR-PROD-01 #9 / NFR-FIL-01: gambar produk JPG/PNG maksimal 2 MB.
-        // Tanda * membuat pesan berlaku untuk setiap berkas dalam larik
-        // `gambar`, bukan hanya berkas pertama.
-        //
-        // Sengaja TIDAK ada `gambar.*.file` di sini. Untuk aturan ukuran
-        // (max/min/size), Laravel menambahkan tipe nilai di akhir key
-        // (`gambar.0.max.file`), dan wildcard `gambar.*.file` ikut menangkap
-        // pencarian itu sehingga pesan `max` berubah menjadi pesan `file`.
-        // Pesan untuk aturan `file` sudah sama dari `validation.file` +
-        // attributes.
+        // FR-PROD-01 #9 / NFR-FIL-01: JPG/PNG maks 2 MB. Tanpa `gambar.*.file`:
+        // wildcard itu menangkap `gambar.0.max.file` dan menimpa pesan `max`.
         'gambar.*' => [
             'mimes' => 'Format gambar harus JPG atau PNG',
             'max' => 'Ukuran gambar maksimal 2 MB',
@@ -224,9 +206,8 @@ return [
     | Nama Field yang Ditampilkan
     |--------------------------------------------------------------------------
     |
-    | Tanpa daftar ini, pesan akan menyebut nama kolom mentah seperti
-    | "category_id" atau "no_hp". Nama di sini mengikuti istilah yang dipakai
-    | dokumen dan formulir.
+    | Tanpa daftar ini, pesan menyebut nama kolom mentah seperti "no_hp".
+    | Nama di sini mengikuti istilah dokumen dan formulir.
     |
     */
 

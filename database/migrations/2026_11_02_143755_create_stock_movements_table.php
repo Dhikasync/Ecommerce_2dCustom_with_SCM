@@ -7,12 +7,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     *
-     * FR-SCM-01 #4 penyesuaian stok (stock opname), #5 kartu stok,
-     * #6 input stok awal.
-     */
+    /** FR-SCM-01 #4-#6: penyesuaian stok, kartu stok, dan input stok awal. */
     public function up(): void
     {
         Schema::create('stock_movements', function (Blueprint $table) {
@@ -34,9 +29,6 @@ return new class extends Migration
         DB::statement('alter table stock_movements add constraint stock_movements_jumlah_check check (jumlah_masuk >= 0 and jumlah_keluar >= 0)');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('stock_movements');

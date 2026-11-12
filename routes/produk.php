@@ -1,19 +1,8 @@
 <?php
 
 /**
- * Modul 4.3 Produk (PROD) - srs.md:398
- * FR-PROD-01 (produk + gambar + varian), FR-PROD-02 (kelola kategori), dan
- * FR-PROD-03 #1 (MOQ per varian). Penegakan MOQ saat keranjang menyusul di
- * modul CART (FR-PROD-03 #2/#3).
- *
- * srs.md:398: hanya Admin Ecommerce yang mengelola produk, kategori, dan MOQ.
- * Pembatasan itu ditegakkan di sisi server (NFR-SEC-03) lewat middleware
- * `role`, dan `active` menolak akun yang dinonaktifkan walau masih memegang
- * sesi lama (FR-AUTH-01).
- *
- * File ini dimuat dari bootstrap/app.php di dalam middleware group `web`,
- * jadi session dan CSRF tetap aktif seperti routes/auth.php dan
- * routes/profil.php.
+ * Modul 4.3 Produk (PROD), srs.md:398: FR-PROD-01/02, FR-PROD-03 #1.
+ * Hanya Admin Ecommerce, ditegakkan middleware `role` + `active` (NFR-SEC-03).
  */
 
 use App\Http\Controllers\Produk\KategoriController;
@@ -38,8 +27,7 @@ Route::middleware(['auth', 'active', 'role:admin_ecommerce'])
             ->name('kategori.destroy');
 
         // FR-PROD-01: daftar, tambah, ubah, hapus produk.
-        // Unggah gambar memakai multipart/form-data; Laravel membaca
-        // `_method=PUT` saat form HTML mengirim ubah produk.
+        // Unggah gambar memakai multipart; form HTML mengirim `_method=PUT`.
         Route::get('/produk', [ProductController::class, 'daftar'])
             ->name('produk.index');
 
@@ -56,9 +44,8 @@ Route::middleware(['auth', 'active', 'role:admin_ecommerce'])
         Route::delete('/produk/{id}/gambar/{gambarId}', [ProductController::class, 'hapusGambar'])
             ->name('produk.gambar.destroy');
 
-        // FR-PROD-01 #3/#8 dan FR-PROD-03 #1: varian (SKU), harga, berat,
-        // dan MOQ. Varian selalu beralamat di bawah produknya supaya id
-        // varian milik produk lain tidak bisa disentuh dari produk ini.
+        // FR-PROD-01 #3/#8, FR-PROD-03 #1. Varian selalu di bawah produknya agar
+        // id varian milik produk lain tidak bisa disentuh dari produk ini.
         Route::get('/produk/{id}/varian', [VariantController::class, 'daftar'])
             ->name('varian.index');
 

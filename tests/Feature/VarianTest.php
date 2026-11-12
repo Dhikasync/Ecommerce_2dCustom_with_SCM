@@ -14,11 +14,8 @@ use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
- * FR-PROD-01 #3/#8 dan FR-PROD-03 #1, UC-09/UC-11.
- *
- * Pesan "Kode SKU sudah digunakan" dikunci apa adanya karena ditetapkan
- * dokumen (user-story:223). Aturan stok awal 0 dan notifikasi ke Admin SCM
- * juga dari dokumen (user-story:218, srs.md:405).
+ * FR-PROD-01 #3/#8, FR-PROD-03 #1, UC-09/UC-11. Pesan "Kode SKU sudah digunakan"
+ * (user-story:223), stok awal 0, dan notifikasi Admin SCM dikunci dari dokumen.
  */
 class VarianTest extends TestCase
 {

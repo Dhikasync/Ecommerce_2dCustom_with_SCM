@@ -48,8 +48,7 @@ class ActiveUserMiddlewareTest extends TestCase
         // Tindakan darurat di luar aplikasi: admin dicabut aksesnya.
         $admin->update(['is_aktif' => false]);
 
-        // Guard menyimpan user di memori selama satu proses test. Melupakannya
-        // menyimulasikan request baru yang membaca ulang sesi dari database.
+        // Guard menyimpan user di memori; forgetGuards() meniru request baru.
         Auth::forgetUser();
 
         $this->getJson('/uji-aktif')

@@ -8,10 +8,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-CDSN-05 #5 Riwayat validasi desain: tanggal, versi desain, status,
-     * dan catatan revisi. Setiap pengajuan/revisi menambah satu baris.
+     * FR-CDSN-05 #5. Satu baris per pengajuan/revisi: tanggal, versi, status,
+     * dan catatan revisi.
      */
     public function up(): void
     {
@@ -33,9 +31,6 @@ return new class extends Migration
         DB::statement('alter table design_revisions add constraint design_revisions_versi_check check (versi >= 1)');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('design_revisions');

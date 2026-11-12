@@ -6,12 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     *
-     * FR-ORDR-01 #2 riwayat status pesanan dan FR-ORDR-03 #5 waktu perubahan
-     * status tercatat di riwayat status.
-     */
+    /** FR-ORDR-01 #2, FR-ORDR-03 #5: riwayat perubahan status beserta waktunya. */
     public function up(): void
     {
         Schema::create('order_status_histories', function (Blueprint $table) {
@@ -47,9 +42,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('order_status_histories');

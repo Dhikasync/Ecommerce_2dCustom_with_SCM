@@ -15,28 +15,8 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * FR-PROD-01 #3/#8 dan FR-PROD-03 #1, UC-09/UC-11: Admin Ecommerce mengelola
- * varian (SKU) beserta harga, berat satuan, dan MOQ.
- *
- * Aturan dokumen yang menentukan bentuk controller ini:
- *
- * - `user-story:218`: setiap varian disimpan sebagai SKU terpisah dengan kode
- *   unik dan **stok awal 0**; Admin Ecommerce tidak mengisi atau mengubah
- *   angka stok. Karena itu `stok_fisik`, `stok_direservasi`, dan
- *   `stok_minimum` tidak pernah dibaca dari request — kolomnya dibiarkan
- *   memakai default database (0) dan hanya Admin SCM yang boleh mengubahnya
- *   (srs.md:398, FR-SCM-01).
- * - `user-story:218`: berat satuan **wajib** karena dipakai menghitung ongkir.
- * - `user-story:223`: SKU duplikat ditolak dengan kalimat persis
- *   "Kode SKU sudah digunakan".
- * - FR-PROD-03 #1: MOQ disimpan pada tingkat varian. Kalau Admin tidak
- *   mengisinya, dipakai 1 — nilai terkecil yang diizinkan
- *   (`variants_moq_check`).
- * - `srs.md:405`: varian baru berstok 0 dan Stok Habis sampai Admin SCM
- *   menginput stok awal, sehingga Admin SCM dinotifikasi saat varian dibuat.
- *
- * Varian selalu dibaca lewat produknya. Ini mencegah satu produk mengubah
- * atau menghapus varian milik produk lain hanya dengan menebak id.
+ * FR-PROD-01 #3/#8, FR-PROD-03 #1, UC-09/UC-11: Admin Ecommerce mengelola varian.
+ * Stok tidak pernah dari request (user-story:218); hanya Admin SCM yang mengubah.
  */
 class VariantController extends Controller
 {
@@ -52,9 +32,6 @@ class VariantController extends Controller
 
     private const STATUS_PESANAN_SELESAI = ['selesai', 'dibatalkan'];
 
-    /**
-     * Daftar varian milik satu produk, urut SKU.
-     */
     public function daftar(int $id): JsonResponse
     {
         $produk = Product::find($id);
@@ -72,9 +49,7 @@ class VariantController extends Controller
         return response()->json(['data' => $varian]);
     }
 
-    /**
-     * FR-PROD-01 #3: tambah varian baru berstok 0 dan beri tahu Admin SCM.
-     */
+    /** FR-PROD-01 #3: varian baru berstok 0 dan Admin SCM dinotifikasi. */
     public function simpan(Request $request, int $id): JsonResponse
     {
         $produk = Product::find($id);
@@ -88,7 +63,6 @@ class VariantController extends Controller
         $varian = DB::transaction(function () use ($produk, $data) {
             $varian = $produk->variants()->create([
                 ...$data,
-                // Angka stok tidak pernah datang dari Admin Ecommerce.
                 'stok_fisik' => 0,
                 'stok_direservasi' => 0,
             ]);
@@ -104,10 +78,7 @@ class VariantController extends Controller
         ], 201);
     }
 
-    /**
-     * FR-PROD-01 #3 dan FR-PROD-03 #1: ubah atribut varian atau MOQ-nya.
-     * Angka stok tidak ikut berubah walau dikirim di request.
-     */
+    /** FR-PROD-01 #3, FR-PROD-03 #1. Stok tidak ikut berubah walau dikirim. */
     public function ubah(Request $request, int $id, int $varianId): JsonResponse
     {
         $produk = Product::find($id);
@@ -131,11 +102,8 @@ class VariantController extends Controller
     }
 
     /**
-     * Menghapus varian ditolak selama masih ada stok atau pesanan berjalan.
-     *
-     * Stok adalah wilayah Admin SCM: menghapus varian yang masih berstok
-     * ikut menghapus riwayat kartu stoknya (`stock_movements` memakai
-     * ON DELETE CASCADE) sehingga angka stok hilang tanpa jejak.
+     * Ditolak saat masih berstok atau ada pesanan aktif: CASCADE akan membuang
+     * riwayat kartu stoknya, wilayah Admin SCM.
      */
     public function hapus(int $id, int $varianId): JsonResponse
     {
@@ -197,23 +165,19 @@ class VariantController extends Controller
             'ukuran' => ['nullable', 'string', 'max:255'],
             'warna' => ['nullable', 'string', 'max:255'],
             'ketebalan' => ['nullable', 'string', 'max:255'],
-            // `harga` boleh 0, `berat` tidak: berat dipakai menghitung ongkir
-            // (user-story:218) dan constraint variants_berat_check menuntut > 0.
             'harga' => ['required', 'integer', 'min:0'],
+            // Berat dipakai menghitung ongkir (user-story:218); 0 ditolak
+            // oleh constraint variants_berat_check.
             'berat' => ['required', 'integer', 'min:1'],
             'moq' => ['sometimes', 'integer', 'min:1'],
         ]);
 
-        // Saat menambah, MOQ yang tidak diisi memakai 1. Saat mengubah,
-        // MOQ yang tidak dikirim dibiarkan apa adanya.
         if (! $varian && ! array_key_exists('moq', $data)) {
             $data['moq'] = 1;
         }
 
-        // SKU dibandingkan tanpa membedakan huruf besar/kecil, sama seperti
-        // nama kategori: `TAS-1` dan `tas-1` dianggap kode yang sama. Unique
-        // bawaan kolom `sku` tetap menjadi penjaga terakhir untuk kode yang
-        // persis sama.
+        // `TAS-1` dan `tas-1` dianggap SKU yang sama; unique kolom tetap
+        // menjadi penjaga terakhir untuk kode yang persis sama.
         $duplikat = Variant::query()
             ->whereRaw('lower(sku) = ?', [Str::lower($data['sku'])])
             ->when($varian, fn ($query) => $query->whereKeyNot($varian->getKey()))
@@ -226,11 +190,7 @@ class VariantController extends Controller
         return $data;
     }
 
-    /**
-     * FR-PROD-01 #3, FR-SCM-01 #6: Admin SCM diberi tahu bahwa ada varian
-     * baru yang menunggu input stok awal. Notifikasi in-app memakai tabel
-     * `notifications` yang sudah ada; akun nonaktif tidak dikirimi.
-     */
+    /** FR-PROD-01 #3, FR-SCM-01 #6: Admin SCM aktif diberi tahu stok awal. */
     private function beritahuAdminScm(Variant $varian, Product $produk): void
     {
         $penerima = User::query()
@@ -267,7 +227,6 @@ class VariantController extends Controller
             'stok_fisik' => $varian->stok_fisik,
             'stok_direservasi' => $varian->stok_direservasi,
             'stok_minimum' => $varian->stok_minimum,
-            // FR-SCM-01: Tersedia selalu dihitung, tidak pernah disimpan.
             'stok_tersedia' => $varian->stok_tersedia,
         ];
     }

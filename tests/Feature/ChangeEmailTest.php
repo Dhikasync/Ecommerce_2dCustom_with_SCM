@@ -11,16 +11,8 @@ use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 /**
- * FR-AUTH-06 #7, FR-PROF-01 #8: ganti email lewat konfirmasi.
- *
- * Aturan dokumen yang diuji di sini:
- * - tautan konfirmasi dikirim ke email BARU,
- * - email lama tetap berlaku sampai verifikasi selesai,
- * - pemberitahuan perubahan dikirim ke email LAMA.
- *
- * Masa berlaku 24 jam mengikuti config auth.verification.expire, dan
- * konfirmasi tanpa login adalah pilihan teknis (tautan dibuka dari aplikasi
- * email, bukan dari browser yang memegang sesi).
+ * FR-AUTH-06 #7, FR-PROF-01 #8. Tautan ke email baru, email lama tetap berlaku,
+ * pemberitahuan ke email lama; konfirmasi tanpa login karena tautan dari email.
  */
 class ChangeEmailTest extends TestCase
 {
@@ -239,8 +231,7 @@ class ChangeEmailTest extends TestCase
 
         $this->getJson($this->tautan($user, $this->tokenTerkirim($user)))->assertOk();
 
-        // Sesi test masih memegang user dari pengajuan tadi; login hanya
-        // bisa diuji setelah sesi itu diakhiri.
+        // Sesi test masih login dari pengajuan tadi; akhiri dulu.
         $this->postJson('/logout')->assertOk();
 
         $this->postJson('/login', [
@@ -258,8 +249,7 @@ class ChangeEmailTest extends TestCase
         $user = $this->pengguna(['email' => 'lama@example.test', 'password' => 'rahasia123']);
         $this->ajukan($user, 'baru@example.test');
 
-        // Pengajuan tadi membuat sesi test sudah login; akhiri dulu supaya
-        // login berikutnya benar-benar diuji dari keadaan guest.
+        // Akhiri sesi supaya login berikutnya diuji dari keadaan guest.
         $this->postJson('/logout')->assertOk();
 
         // Sebelum tautan diklik: email lama masih berlaku...

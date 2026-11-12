@@ -7,11 +7,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     *
-     * FR-CDSN-01 Kelola Template Desain: kanvas dan area kustomisasi (canvas boundary).
-     */
+    /** FR-CDSN-01: kanvas dan area kustomisasi (canvas boundary) per template. */
     public function up(): void
     {
         Schema::create('templates', function (Blueprint $table) {
@@ -36,9 +32,6 @@ return new class extends Migration
         DB::statement('alter table templates add constraint templates_area_tinggi_check check (area_tinggi is null or area_tinggi > 0)');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('templates');

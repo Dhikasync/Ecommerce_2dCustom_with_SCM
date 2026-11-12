@@ -28,10 +28,7 @@ class RajaOngkirClientTest extends TestCase
         return $this->app->make(RajaOngkir::class);
     }
 
-    /**
-     * Bentuk respons disalin dari panggilan asli ke RajaOngkir, supaya
-     * pemetaannya teruji terhadap bentuk yang benar-benar dipakai.
-     */
+    /** Bentuk respons disalin dari panggilan asli, agar pemetaannya teruji. */
     private function responsLokasi(array $data = [
         [
             'id' => 4816,
@@ -93,8 +90,7 @@ class RajaOngkirClientTest extends TestCase
 
     public function test_kata_kunci_kosong_diteruskan_apa_adanya(): void
     {
-        // Dokumen tidak mengatur kata kunci kosong; client tidak mengarang
-        // aturan sendiri, keputusan ada di endpoint pemanggil.
+        // Dokumen tidak mengatur kata kunci kosong; keputusan ada di endpoint.
         Http::fake([
             '*' => Http::response($this->responsLokasi([])),
         ]);

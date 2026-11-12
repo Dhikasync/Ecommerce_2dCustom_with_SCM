@@ -9,18 +9,14 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 /**
- * SI-02: satu-satunya pintu aplikasi ke API RajaOngkir.
- *
- * Kunci API hanya dibaca di server. Batas waktu dan cara gagal di bawah ini
- * bukan aturan bisnis — SRS dan User Story tidak mengaturnya — jadi nilainya
- * dipilih di sini dan sengaja dicatat supaya mudah diubah.
+ * SI-02: satu-satunya pintu aplikasi ke API RajaOngkir; kunci hanya di server.
+ * Batas waktu bukan aturan dokumen, dipilih di sini agar mudah diubah.
  */
 class RajaOngkir
 {
-    /** Batas menunggu respons penuh; pencarian lokasi dipakai saat User mengetik. */
     private const BATAS_WAKTU_DETIK = 8;
 
-    /** Batas membuka koneksi, supaya server yang menggantung tidak menahan request. */
+    /** Lebih pendek dari timeout, agar server yang menggantung tidak menahan request. */
     private const BATAS_KONEKSI_DETIK = 4;
 
     public function __construct(
@@ -29,15 +25,12 @@ class RajaOngkir
     ) {}
 
     /**
-     * FR-PROF-01 #4, UC-08: cari kecamatan/kelurahan dari kata kunci.
-     *
-     * Hasil RajaOngkir berupa id kecamatan dan label panjang
-     * ("AIRLANGGA, GUBENG, SURABAYA, JAWA TIMUR, 60286"); keduanya dipetakan
-     * ke nama kolom yang dipakai aplikasi, kode_lokasi dan label_lokasi.
+     * FR-PROF-01 #4, UC-08. Format RajaOngkir (`id`, `label`) dipetakan ke
+     * nama kolom aplikasi.
      *
      * @return list<array{kode_lokasi: string, label_lokasi: string}>
      *
-     * @throws RajaOngkirException kalau layanan tidak bisa dipakai.
+     * @throws RajaOngkirException
      */
     public function cariLokasi(string $kataKunci): array
     {
@@ -73,11 +66,6 @@ class RajaOngkir
             ->connectTimeout(self::BATAS_KONEKSI_DETIK);
     }
 
-    /**
-     * Base URL di .env sering ditulis dengan garis miring di akhir. Laravel
-     * sudah menormalkan saat menyusun URL, tetapi rtrim membuat bentuknya
-     * tegas dan tetap aman kalau nanti base URL dipakai untuk tautan sendiri.
-     */
     private function tautanDasar(): string
     {
         return rtrim($this->baseUrl, '/');
@@ -92,9 +80,7 @@ class RajaOngkir
             throw new RajaOngkirException('RajaOngkir membalas status '.$response->status());
         }
 
-        // Bentuk respons yang dipakai di sini disalin dari respons asli:
-        // {"meta":{"status":"success",...},"data":[...]}. Kalau meta.status
-        // tidak ada, keberhasilan dinilai dari data saja.
+        // Bentuk respons disalin dari respons asli: {"meta":{"status":"success"},"data":[...]}.
         $status = $response->json('meta.status');
 
         if ($status !== null && $status !== 'success') {

@@ -7,11 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class PurchaseOrderItem extends Model
 {
-    /**
-     * Nama produk, nama varian, dan SKU disalin saat PO dibuat supaya
-     * FR-PROD-01 #5 tetap terpenuhi: produk/varian boleh dihapus, riwayat PO
-     * masih menampilkan barang apa yang dipesan.
-     */
+    /** Nama produk/varian/SKU disalin agar riwayat PO tetap terbaca (FR-PROD-01 #5). */
     protected $fillable = [
         'purchase_order_id',
         'variant_id',

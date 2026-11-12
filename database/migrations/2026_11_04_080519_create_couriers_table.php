@@ -7,10 +7,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-CKOT-04 Kelola Kurir dan Pengaturan Ongkir.
-     * Satu kode kurir dapat memiliki beberapa layanan, tetapi pasangan
+     * FR-CKOT-04. Satu kode kurir boleh beberapa layanan, tetapi pasangan
      * kode + layanan tidak boleh ganda.
      */
     public function up(): void
@@ -28,9 +25,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('couriers');

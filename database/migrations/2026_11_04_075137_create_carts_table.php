@@ -7,10 +7,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-CART-01 Mengelola Keranjang Belanja: satu keranjang per User,
-     * memuat produk jadi dan produk custom sekaligus.
+     * FR-CART-01: satu keranjang per User (unique `user_id`), memuat produk
+     * jadi dan custom sekaligus.
      */
     public function up(): void
     {
@@ -21,9 +19,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('carts');

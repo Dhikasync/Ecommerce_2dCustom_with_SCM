@@ -7,10 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class CancellationRequest extends Model
 {
-    /**
-     * FR-ORDR-02 #2: User mengajukan pembatalan untuk pesanan yang sudah Lunas.
-     * FR-ORDR-06: Admin Ecommerce memutuskan permohonan tersebut.
-     */
+    /** FR-ORDR-02 #2 (diajukan User), FR-ORDR-06 (diputuskan Admin). */
     protected $fillable = [
         'order_id',
         'user_id',

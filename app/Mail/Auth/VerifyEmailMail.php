@@ -9,19 +9,14 @@ use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Support\Facades\URL;
 
 /**
- * FR-AUTH-06 #1/#5: email berisi tautan verifikasi bertanda tangan
- * yang membawa token aktif milik user.
- *
- * Token asli hanya hidup di objek ini dan di tautan email; kolom
- * `email_verification_token` menyimpan hash-nya saja.
+ * FR-AUTH-06 #1/#5. Token asli hanya ada di objek ini dan tautan email;
+ * kolom `email_verification_token` menyimpan hash-nya.
  */
 class VerifyEmailMail extends Mailable
 {
     public function __construct(public User $user, public string $token) {}
 
-    /**
-     * Tautan 24 jam: id + hash email + token, ditandatangani APP_KEY.
-     */
+    /** Tautan 24 jam: id + hash email + token, ditandatangani APP_KEY. */
     public static function urlFor(User $user, string $token): string
     {
         return URL::temporarySignedRoute(

@@ -7,11 +7,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     *
-     * FR-CKOT-04 alamat asal pengiriman toko: hanya satu baris pengaturan.
-     */
+    /** FR-CKOT-04: alamat asal pengiriman toko; hanya satu baris (id = 1). */
     public function up(): void
     {
         Schema::create('shop_settings', function (Blueprint $table) {
@@ -25,9 +21,6 @@ return new class extends Migration
         DB::statement('alter table shop_settings add constraint shop_settings_singleton_check check (id = 1)');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('shop_settings');

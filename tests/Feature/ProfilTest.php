@@ -8,11 +8,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * FR-PROF-01 #1, #2, #3, #10, UC-06: GET /profil dan PUT /profil.
- *
- * Aturan nomor telepon (+62 lalu 9-12 angka) adalah keputusan pemilik
- * proyek, bukan kutipan dokumen; dokumen hanya menetapkan pesannya
- * ("Format nomor telepon tidak valid") dan bahwa field ini opsional.
+ * FR-PROF-01 #1, #2, #3, #10, UC-06. Format nomor telepon (+62 + 9-12 angka)
+ * adalah keputusan pemilik proyek; dokumen hanya menetapkan pesannya.
  */
 class ProfilTest extends TestCase
 {
@@ -145,8 +142,7 @@ class ProfilTest extends TestCase
 
         $user->refresh();
 
-        // FR-PROF-01 #10: "tidak menyimpan perubahan" — nomor telepon pun
-        // tidak boleh ikut tersimpan sebagian.
+        // FR-PROF-01 #10: "tidak menyimpan perubahan" termasuk nomor telepon.
         $this->assertSame('Nama Lama', $user->name);
         $this->assertSame('+628111111111', $user->no_hp);
     }

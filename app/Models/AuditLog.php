@@ -7,10 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class AuditLog extends Model
 {
-    /**
-     * NFR-SEC-07: catatan aksi sensitif Admin â€” pelaku, waktu (created_at),
-     * dan perubahan (data_lama -> data_baru).
-     */
+    /** NFR-SEC-07: aksi sensitif Admin (pelaku, waktu, perubahan). */
     protected $fillable = [
         'user_id',
         'aksi',

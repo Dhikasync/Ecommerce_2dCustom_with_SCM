@@ -35,19 +35,13 @@ class Product extends Model
         return $this->hasMany(Variant::class);
     }
 
-    /**
-     * FR-CDSN-01: satu produk custom dapat memiliki lebih dari satu template
-     * desain (mis. ukuran kanvas berbeda), jadi relasinya hasMany — bukan hasOne.
-     */
+    /** FR-CDSN-01: satu produk custom boleh punya beberapa template desain. */
     public function templates()
     {
         return $this->hasMany(Template::class);
     }
 
-    /**
-     * FR-KTLG-02 #1: galeri gambar pada halaman detail produk, tampil
-     * berurutan sesuai kolom `urutan`.
-     */
+    /** FR-KTLG-02 #1: galeri detail produk, urut kolom `urutan`. */
     public function images()
     {
         return $this->hasMany(ProductImage::class)->orderBy('urutan');

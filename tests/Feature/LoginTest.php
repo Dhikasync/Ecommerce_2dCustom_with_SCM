@@ -93,8 +93,7 @@ class LoginTest extends TestCase
 
     public function test_email_tidak_terdaftar_tetap_memeriksa_hash_password(): void
     {
-        // Tanpa hash palsu, email tak terdaftar kembali tanpa memanggil bcrypt,
-        // sehingga waktunya bisa dipakai menebak email mana yang punya akun.
+        // Hash tetap diperiksa saat email tidak ditemukan agar waktu respons seragam.
         Hash::shouldReceive('check')->once()->andReturnFalse();
 
         $this->postJson('/login', [
@@ -155,8 +154,7 @@ class LoginTest extends TestCase
     {
         $this->user();
 
-        // url.intended dibentuk dari header Host, jadi host asing tidak boleh
-        // dipakai sebagai tujuan redirect setelah login.
+        // url.intended berasal dari header Host; host asing tidak boleh jadi tujuan.
         $this->withSession(['url.intended' => 'https://situs-palsu.example/masuk'])
             ->postJson('/login', $this->payload())
             ->assertOk()

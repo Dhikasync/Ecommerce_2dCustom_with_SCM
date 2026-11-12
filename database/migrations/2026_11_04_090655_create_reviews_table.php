@@ -8,10 +8,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-ORDR-05 Ulasan Produk: rating 1-5, satu ulasan per item pesanan,
-     * ulasan dapat diedit (is_edited).
+     * FR-ORDR-05. Rating 1-5, satu ulasan per item pesanan (unique
+     * `order_item_id`), dan ulasan boleh diedit (`is_edited`).
      */
     public function up(): void
     {
@@ -32,9 +30,6 @@ return new class extends Migration
         DB::statement('alter table reviews add constraint reviews_rating_check check (rating between 1 and 5)');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('reviews');

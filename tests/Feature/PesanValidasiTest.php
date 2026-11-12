@@ -6,17 +6,13 @@ use Illuminate\Support\Arr;
 use Tests\TestCase;
 
 /**
- * Penjaga kelengkapan terjemahan pesan validasi (APP_LOCALE=id).
- *
- * Tanpa test ini, key yang lupa diterjemahkan akan diam-diam muncul dalam
- * bahasa Inggris, karena Laravel jatuh ke file bawaan vendor ketika key di
- * `lang/id/validation.php` tidak ada.
+ * Penjaga terjemahan pesan validasi (APP_LOCALE=id). Tanpa ini, key yang belum
+ * diterjemahkan diam-diam muncul dalam bahasa Inggris dari file vendor.
  */
 class PesanValidasiTest extends TestCase
 {
     /**
-     * Meratakan file terjemahan menjadi daftar key bertitik, misalnya
-     * "between.string" atau "custom.email.unique".
+     * Meratakan file terjemahan menjadi key bertitik, mis. "custom.email.unique".
      *
      * @param  array<string, mixed>  $baris
      * @return array<string, string>
@@ -49,8 +45,7 @@ class PesanValidasiTest extends TestCase
 
         $hasil = $this->ratakan(require $berkas);
 
-        // `custom` dan `attributes` di file bawaan hanya contoh, bukan aturan,
-        // jadi tidak perlu diterjemahkan satu per satu.
+        // `custom` dan `attributes` bawaan hanya contoh, tidak perlu diterjemahkan.
         unset($hasil['custom.attribute-name.rule-name']);
 
         return $hasil;
@@ -119,9 +114,7 @@ class PesanValidasiTest extends TestCase
         $this->assertSame('Konfirmasi password tidak sesuai', __('validation.custom.password.confirmed'));
         $this->assertSame('Password minimal 8 karakter', __('validation.custom.password.min'));
 
-        // FR-PROD-01 #9 / NFR-FIL-01: format dan ukuran gambar produk.
-        // Dibaca lewat Arr::dot karena kunci `gambar.*` tidak bisa diambil
-        // dengan titik biasa; validator sendiri membaca dengan cara yang sama.
+        // FR-PROD-01 #9 / NFR-FIL-01. Arr::dot dipakai karena kunci `gambar.*`.
         $custom = Arr::dot((array) __('validation.custom'));
 
         $this->assertSame('Format gambar harus JPG atau PNG', $custom['gambar.*.mimes']);

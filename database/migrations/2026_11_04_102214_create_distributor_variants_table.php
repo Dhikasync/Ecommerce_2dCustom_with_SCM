@@ -7,10 +7,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
-     *
-     * FR-SCM-04 #2: daftar varian yang biasa disuplai oleh seorang distributor.
-     * Satu pasangan distributor + varian hanya boleh tercatat sekali.
+     * FR-SCM-04 #2: varian yang biasa disuplai distributor; satu pasangan
+     * distributor + varian hanya sekali.
      */
     public function up(): void
     {
@@ -24,9 +22,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('distributor_variants');

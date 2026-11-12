@@ -11,22 +11,8 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * FR-PROD-02, UC-10: Admin Ecommerce mengelola kategori produk.
- *
- * Aktornya hanya Admin Ecommerce (srs.md:398); pembatasan role ditegakkan
- * middleware `role` di routes/produk.php, bukan di controller ini.
- *
- * Nama kategori unik tanpa membedakan huruf besar/kecil. Itu keputusan di
- * luar dokumen (dicatat di README): dokumen hanya menulis "nama unik". Aturan
- * ini ditegakkan di sini, bukan lewat indeks tambahan di database, sehingga
- * pesan "Kategori sudah ada" (srs.md:406) muncul sebagai pesan validasi.
- * Unique bawaan kolom `nama` tetap menjadi penjaga terakhir untuk nama yang
- * persis sama.
- *
- * Kategori yang masih dipakai produk tidak boleh dihapus (srs.md:407).
- * Pemeriksaan di controller memberi pesan yang ditetapkan dokumen; FK
- * `products.category_id` yang memakai ON DELETE RESTRICT menjadi jaring
- * pengaman terakhir kalau pemeriksaan itu terlewat.
+ * FR-PROD-02, UC-10: Admin Ecommerce mengelola kategori; role dibatasi middleware.
+ * Nama unik tanpa beda huruf besar/kecil (keputusan luar dokumen, README).
  */
 class KategoriController extends Controller
 {
@@ -36,9 +22,6 @@ class KategoriController extends Controller
 
     private const PESAN_TIDAK_DITEMUKAN = 'Kategori tidak ditemukan';
 
-    /**
-     * Daftar kategori untuk halaman admin, diurutkan menurut nama.
-     */
     public function daftar(): JsonResponse
     {
         $kategori = Category::orderBy('nama')
@@ -49,9 +32,7 @@ class KategoriController extends Controller
         return response()->json(['data' => $kategori]);
     }
 
-    /**
-     * FR-PROD-02: tambah kategori baru.
-     */
+    /** FR-PROD-02. */
     public function simpan(Request $request): JsonResponse
     {
         $kategori = Category::create($this->validasi($request));
@@ -62,9 +43,7 @@ class KategoriController extends Controller
         ], 201);
     }
 
-    /**
-     * FR-PROD-02: ubah nama atau deskripsi kategori.
-     */
+    /** FR-PROD-02. */
     public function ubah(Request $request, int $id): JsonResponse
     {
         $kategori = Category::find($id);
@@ -82,7 +61,8 @@ class KategoriController extends Controller
     }
 
     /**
-     * FR-PROD-02, srs.md:407: kategori yang masih dipakai produk ditolak.
+     * srs.md:407. ON DELETE RESTRICT pada `products.category_id` menjadi
+     * jaring pengaman terakhir kalau pemeriksaan ini terlewat.
      */
     public function hapus(int $id): JsonResponse
     {
@@ -111,7 +91,6 @@ class KategoriController extends Controller
      */
     private function validasi(Request $request, ?Category $kategori = null): array
     {
-        // Nama atau deskripsi yang hanya berisi spasi dianggap kosong.
         foreach (['nama', 'deskripsi'] as $field) {
             $nilai = $request->input($field);
 
@@ -121,12 +100,10 @@ class KategoriController extends Controller
         }
 
         $data = $request->validate([
-            // 255 mengikuti tipe `string` kolom `nama` di migrasi categories.
             'nama' => ['required', 'string', 'max:255'],
             'deskripsi' => ['nullable', 'string'],
         ]);
 
-        // Dibandingkan dalam huruf kecil supaya `Tas` dan `tas` dianggap sama.
         $duplikat = Category::query()
             ->whereRaw('lower(nama) = ?', [Str::lower($data['nama'])])
             ->when($kategori, fn ($query) => $query->whereKeyNot($kategori->getKey()))
@@ -140,8 +117,6 @@ class KategoriController extends Controller
     }
 
     /**
-     * Bentuk kategori yang dikirim ke API.
-     *
      * @return array<string, mixed>
      */
     private function ringkas(Category $kategori): array

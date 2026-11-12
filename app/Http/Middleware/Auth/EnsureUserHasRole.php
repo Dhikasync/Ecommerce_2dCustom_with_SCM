@@ -6,13 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-/**
- * FR-AUTH-01 #7: menolak akses lintas role di sisi server.
- *
- * Dipakai dengan daftar role yang diizinkan, misalnya
- * `role:admin_ecommerce,admin_scm`. Role lain mendapat 403 dengan pesan
- * yang ditetapkan User Story, bukan halaman 404 atau HTML bawaan.
- */
+/** FR-AUTH-01 #7: menolak akses lintas role, mis. `role:admin_ecommerce,admin_scm`. */
 class EnsureUserHasRole
 {
     public function handle(Request $request, Closure $next, string ...$roles): Response

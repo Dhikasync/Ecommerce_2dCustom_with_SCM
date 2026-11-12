@@ -7,10 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class DesignRevision extends Model
 {
-    /**
-     * FR-CDSN-05 #5: riwayat validasi desain â€” tanggal, versi, status,
-     * dan catatan revisi. Satu baris per pengajuan/revisi.
-     */
+    /** FR-CDSN-05 #5: satu baris per pengajuan/revisi desain, beserta catatan revisi. */
     protected $fillable = [
         'design_id',
         'versi',

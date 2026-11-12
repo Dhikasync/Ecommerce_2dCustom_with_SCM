@@ -6,10 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Payment extends Model
 {
-    /**
-     * Pembayaran hanya lewat payment gateway. Satu pesanan dapat memiliki
-     * beberapa baris percobaan; tidak ada bukti transfer manual.
-     */
+    /** Gateway saja; satu pesanan boleh punya beberapa percobaan. Tidak ada bukti transfer manual. */
     protected $fillable = [
         'order_id',
         'snap_token',
