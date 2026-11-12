@@ -1,11 +1,8 @@
 <?php
 
 /**
- * Modul 4.1 Autentikasi dan Akun (AUTH) — srs.md:325
- * FR-AUTH-01/02/03/04/06.
- *
- * File ini dimuat dari bootstrap/app.php di dalam middleware group `web`,
- * jadi session dan CSRF tetap aktif seperti route di routes/web.php.
+ * Modul 4.1 Autentikasi dan Akun (AUTH), srs.md:325: FR-AUTH-01/02/03/04/06.
+ * Dimuat dari bootstrap/app.php di dalam group `web`, jadi session/CSRF aktif.
  */
 
 use App\Http\Controllers\Auth\AuthController;

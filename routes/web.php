@@ -8,6 +8,4 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
-// Katalog produk tidak lagi memakai route sementara di sini. Endpoint
-// katalog dibangun terpisah saat FR-KTLG-01, dengan filter produk aktif,
-// paginasi, dan harga dari varian termurah.
+// Katalog dibangun terpisah saat FR-KTLG-01: filter aktif, paginasi, harga termurah.
