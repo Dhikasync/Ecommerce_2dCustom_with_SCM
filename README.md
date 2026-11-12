@@ -18,7 +18,7 @@ Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS 
 | --- | --- | --- |
 | Autentikasi | FR-AUTH | ✅ lengkap: login Admin/User, registrasi, verifikasi email, ganti email dari profil, lupa/reset password, logout, middleware role |
 | Produk (admin) | FR-PROD | ✅ sisi admin: produk + gambar, varian (SKU/harga/berat/MOQ), kategori. Penegakan MOQ saat tambah ke keranjang menyusul di modul CART (FR-PROD-03 #2/#3) |
-| Katalog produk | FR-KTLG | ⏳ berikutnya |
+| Katalog produk | FR-KTLG | 🔄 berjalan: FR-KTLG-01 daftar katalog (produk aktif, harga termurah, badge Custom, status stok, paginasi, rating). Filter, pencarian, dan detail produk menyusul (FR-KTLG-02/03) |
 | Keranjang & checkout | FR-CART | ⏳ |
 | Pesanan & pembayaran | FR-ORDR, FR-PAYM | ⏳ |
 | Desain kustom 2D | FR-DSN | ⏳ |
@@ -188,6 +188,7 @@ Semua route dipisah per modul di `routes/*.php` dan memakai session guard. Respo
 | PUT | `/profil/alamat/{id}/utama` | `alamat.utama` | `auth`, `active` | FR-PROF-01 #7 — tandai alamat utama |
 | PUT | `/profil/email` | `profil.email.ajukan` | `auth`, `active`, throttle 6/menit | FR-PROF-01 #8 — ajukan email baru; email lama tetap berlaku |
 | GET | `/profil/email/verify/{id}/{hash}` | `profil.email.verify` | `signed`, throttle 6/menit | FR-AUTH-06 #7 — konfirmasi email baru (tautan 24 jam, sekali pakai) |
+| GET | `/katalog` | `katalog.index` | — | FR-KTLG-01, UC-12 — daftar produk aktif: foto, nama, badge Custom, `harga_mulai` dari varian termurah, MOQ terkecil, `status_stok`, rating, paginasi `per_page` (12, maks 50) |
 | GET | `/admin/kategori` | `kategori.index` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - daftar kategori urut nama |
 | POST | `/admin/kategori` | `kategori.store` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - tambah kategori (nama unik tanpa beda huruf) |
 | PUT | `/admin/kategori/{id}` | `kategori.update` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - ubah nama/deskripsi |
@@ -236,6 +237,10 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Arti "nama kategori unik" (FR-PROD-02)**: dokumen tidak menyebut huruf besar/kecil, jadi `Tas` dan `tas` dianggap sama. Aturan ini ditegakkan **di `KategoriController`** (`lower(nama)` + `whereKeyNot`), bukan dengan indeks tambahan di database — database hanya menolak nama yang persis sama lewat unique bawaan kolom `nama`. Konsekuensi yang diterima: jalur tulis di luar controller (seeder, SQL manual, atau dua permintaan yang benar-benar bersamaan) masih bisa menyisipkan `Tas` dan `tas` berdampingan.
 - **Prefiks rute admin**: endpoint kelola kategori memakai `/admin/...` supaya terpisah dari katalog publik yang nanti memakai `/katalog` (FR-KTLG). Dokumen tidak mengatur bentuk URL.
 - **Zona waktu WIB ditulis tetap di `config/app.php` (NFR-LOC-01)**: nilai `Asia/Jakarta` tidak lewat `env()`, karena WIB adalah satu-satunya zona waktu yang dipakai (srs.md:807). Nilai env akan membuka celah zona lain masuk tanpa ada kebutuhan. `tests/Feature/ZonaWaktuTest.php` menjaga tiga hal: config dan zona waktu PHP sama-sama `Asia/Jakarta`, waktu sekarang berselisih `+07:00` tanpa menggeser momennya, dan timestamp yang ditulis database lalu dibaca model kembali muncul dalam WIB.
+- **Kartu katalog (FR-KTLG-01)**: dokumen menentukan isi kartu tetapi tidak bentuk respons, jadi `GET /katalog` mengirim `harga_mulai` (varian termurah, atau `harga_dasar` bila belum ada varian), `moq` (MOQ terkecil antar varian, `null` bila belum ada varian), dan `status_stok` `"tersedia"`/`"habis"` (ada varian dengan `stok_fisik - stok_direservasi > 0`; produk tanpa varian dianggap habis). Angka stok per varian tidak dikirim di kartu karena itu isi detail produk (FR-KTLG-02). Format "Mulai Rp 15.000" diserahkan ke lapisan tampilan; API mengirim angka.
+- **Paginasi katalog**: 12 produk per halaman (grid 3x4 di ponsel) dan `per_page` dibatasi maksimum 50; dokumen hanya meminta paginasi (FR-KTLG-01 #3) tanpa angka. Urutan default `nama` menaik supaya halaman tidak berubah isinya saat berpindah halaman; urutan harga adalah FR-KTLG-03 #6.
+- **Rating katalog**: SRS 4.4.2 meminta rating "jika ada, dari FR-ORDR-05". Endpoint ulasan belum dibangun, tetapi tabel `reviews` sudah ada, jadi katalog menghitung `rating` (rata-rata, `null` bila kosong) dan `jumlah_ulasan` langsung dari sana — begitu ulasan masuk, kartu terisi tanpa mengubah kontrak.
+- **Katalog tanpa login**: `GET /katalog` tidak memakai middleware `auth`/`active` karena SRS 4.4.1 menyatakan Guest boleh menjelajah katalog; keranjang dan checkout tetap butuh login.
 - **Serialisasi tanggal ke JSON masih UTC** (hutang, bukan keputusan): `toJson()` model mengirim `2026-11-12T05:57:47.000000Z`, bukan `+07:00`. Saat ini belum ada endpoint yang mengirim timestamp mentah — semua respons menulis kolom satu per satu — jadi belum melanggar NFR-LOC-01. Begitu modul Pesanan/Notifikasi mulai mengirim waktu, tanggal harus diformat WIB di lapisan respons (misalnya `->format('Y-m-d\TH:i:sP')`) atau lewat satu `serializeDate()` bersama, bukan dibiarkan `Z`.
 - **Pesan `"Kategori tidak ditemukan"`**: dokumen hanya menetapkan pesan duplikat dan pesan kategori terpakai (`srs.md:406-407`); pesan untuk id yang tidak ada mengikuti pola `"Alamat tidak ditemukan"` dan dijawab `404`.
 
