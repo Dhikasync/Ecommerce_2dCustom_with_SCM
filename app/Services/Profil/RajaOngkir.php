@@ -3,6 +3,7 @@
 namespace App\Services\Profil;
 
 use App\Exceptions\Profil\RajaOngkirException;
+use Closure;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -19,6 +20,11 @@ class RajaOngkir
     /** Lebih pendek dari timeout, agar server yang menggantung tidak menahan request. */
     private const BATAS_KONEKSI_DETIK = 4;
 
+    /** Satu kali ulang: gangguan sepersekian detik tidak perlu terlihat User. */
+    private const PERCOBAAN_MAKS = 2;
+
+    private const JEDA_ULANG_MILIDETIK = 200;
+
     public function __construct(
         private readonly string $kunci,
         private readonly string $baseUrl,
@@ -34,15 +40,11 @@ class RajaOngkir
      */
     public function cariLokasi(string $kataKunci): array
     {
-        $peminta = $this->peminta();
-
-        try {
-            $response = $peminta->get('/destination/domestic-destination', [
+        $response = $this->kirim(
+            fn (PendingRequest $peminta) => $peminta->get('/destination/domestic-destination', [
                 'search' => $kataKunci,
-            ]);
-        } catch (ConnectionException $e) {
-            throw new RajaOngkirException('RajaOngkir tidak dapat dihubungi', previous: $e);
-        }
+            ]),
+        );
 
         $data = $this->bacaData($response, 'Respons RajaOngkir tidak memuat data lokasi');
 
@@ -71,18 +73,14 @@ class RajaOngkir
      */
     public function hitungOngkir(string $asal, string $tujuan, int $beratGram, string $kurir): array
     {
-        $peminta = $this->peminta();
-
-        try {
-            $response = $peminta->asForm()->post('/calculate/domestic-cost', [
+        $response = $this->kirim(
+            fn (PendingRequest $peminta) => $peminta->asForm()->post('/calculate/domestic-cost', [
                 'origin' => $asal,
                 'destination' => $tujuan,
                 'weight' => $beratGram,
                 'courier' => $kurir,
-            ]);
-        } catch (ConnectionException $e) {
-            throw new RajaOngkirException('RajaOngkir tidak dapat dihubungi', previous: $e);
-        }
+            ]),
+        );
 
         $data = $this->bacaData($response, 'Respons RajaOngkir tidak memuat data tarif');
         $hasil = [];
@@ -92,17 +90,65 @@ class RajaOngkir
                 throw new RajaOngkirException('Bentuk data tarif tidak dikenali');
             }
 
+            // Respons pihak ketiga adalah input tidak tepercaya: angkanya menjadi
+            // `orders.ongkir`, jadi bentuk dan nilainya diperiksa sebelum dipakai.
+            $biaya = $baris['cost'];
+
+            if (! is_int($biaya) && ! (is_string($biaya) && ctype_digit($biaya))) {
+                throw new RajaOngkirException('Bentuk data tarif tidak dikenali');
+            }
+
+            // srs.md:520: ongkir tidak boleh diam-diam menjadi Rp 0.
+            if ((int) $biaya <= 0) {
+                throw new RajaOngkirException('Tarif tidak wajar');
+            }
+
             $hasil[] = [
                 'kode_kurir' => (string) $baris['code'],
                 'nama_kurir' => (string) ($baris['name'] ?? $baris['code']),
                 'layanan' => (string) $baris['service'],
                 'deskripsi' => (string) ($baris['description'] ?? ''),
-                'biaya' => (int) $baris['cost'],
+                'biaya' => (int) $biaya,
                 'etd' => (string) ($baris['etd'] ?? ''),
             ];
         }
 
         return $hasil;
+    }
+
+    /**
+     * Satu pintu keluar HTTP: gangguan sementara diulang sekali sebelum menyerah.
+     * 4xx tidak diulang karena kunci atau permintaan yang salah bukan gangguan.
+     *
+     * @param  Closure(PendingRequest): Response  $perintah
+     *
+     * @throws RajaOngkirException
+     */
+    private function kirim(Closure $perintah): Response
+    {
+        $percobaan = 0;
+
+        while (true) {
+            $percobaan++;
+
+            try {
+                $response = $perintah($this->peminta());
+            } catch (ConnectionException $e) {
+                if ($percobaan >= self::PERCOBAAN_MAKS) {
+                    throw new RajaOngkirException('RajaOngkir tidak dapat dihubungi', previous: $e);
+                }
+
+                usleep(self::JEDA_ULANG_MILIDETIK * 1000);
+
+                continue;
+            }
+
+            if (! $response->serverError() || $percobaan >= self::PERCOBAAN_MAKS) {
+                return $response;
+            }
+
+            usleep(self::JEDA_ULANG_MILIDETIK * 1000);
+        }
     }
 
     private function peminta(): PendingRequest

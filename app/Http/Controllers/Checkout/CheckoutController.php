@@ -44,6 +44,12 @@ class CheckoutController extends Controller
 
     private const PESAN_ITEM_TIDAK_DITEMUKAN = 'Item keranjang tidak ditemukan';
 
+    /** Bukan aturan dokumen: batas teknis agar jumlah parameter tetap wajar. */
+    private const BATAS_ITEM = 50;
+
+    /** Respons checkout memuat alamat dan nomor telepon: jangan disimpan perantara. */
+    private const CACHE_CONTROL = 'no-store, private';
+
     public function __construct(private readonly RajaOngkir $rajaOngkir) {}
 
     /**
@@ -74,7 +80,7 @@ class CheckoutController extends Controller
             'kurir' => $this->kurirAktif(),
             'sla_hari' => $sla,
             'estimasi_sla' => $this->estimasiSla($sla),
-        ]]);
+        ]])->header('Cache-Control', self::CACHE_CONTROL);
     }
 
     /** Skenario #3 dan #8: ongkir dari berat total, lalu total = subtotal + ongkir. */
@@ -99,7 +105,7 @@ class CheckoutController extends Controller
             'berat_total' => $this->berat($pilihan['item']),
             'ongkir' => $ongkir,
             'total' => $subtotal + $ongkir,
-        ]]);
+        ]])->header('Cache-Control', self::CACHE_CONTROL);
     }
 
     /**
@@ -136,7 +142,8 @@ class CheckoutController extends Controller
             return $this->keranjangBerubah($e->items);
         }
 
-        return response()->json(['data' => $this->ringkasPesanan($pesanan)], 201);
+        return response()->json(['data' => $this->ringkasPesanan($pesanan)], 201)
+            ->header('Cache-Control', self::CACHE_CONTROL);
     }
 
     /**
@@ -268,12 +275,39 @@ class CheckoutController extends Controller
     private function itemTerpilih(Request $request): Collection|JsonResponse
     {
         $masukan = $request->input('item_ids');
-        $id = is_array($masukan)
-            ? array_values(array_unique(array_filter($masukan, 'is_numeric')))
-            : [];
 
-        if ($id === []) {
+        // Pilihan kosong adalah skenario #4; bentuk id yang tidak dikenal bukan
+        // "kosong", jadi dijawab seperti id yang tidak ada (NFR-SEC-03).
+        if (! is_array($masukan) || $masukan === []) {
             return response()->json(['message' => self::PESAN_PILIH_ITEM], 422);
+        }
+
+        $id = [];
+
+        foreach ($masukan as $satu) {
+            if (is_int($satu)) {
+                $id[] = $satu;
+
+                continue;
+            }
+
+            // `is_numeric` meloloskan "1e3"/"1.5"/"1e999", dan PostgreSQL menolak
+            // bind itu sebagai bigint — jalan gratis menuju 500.
+            if (is_string($satu) && ctype_digit($satu)) {
+                $id[] = (int) $satu;
+
+                continue;
+            }
+
+            return response()->json(['message' => self::PESAN_ITEM_TIDAK_DITEMUKAN], 404);
+        }
+
+        $id = array_values(array_unique($id));
+
+        // Batas 50 menjaga jumlah parameter di bawah batas PostgreSQL (65.535);
+        // tanpa itu 66.000 id = 2,6 detik query lalu 500.
+        if (count($id) > self::BATAS_ITEM) {
+            return response()->json(['message' => self::PESAN_ITEM_TIDAK_DITEMUKAN], 404);
         }
 
         $item = CartItem::query()

@@ -18,11 +18,16 @@ Route::middleware(['auth', 'active'])
             ->name('checkout.tampil');
 
         // FR-CKOT-01 #3/#8: ongkir dari berat total, asal toko, dan lokasi tujuan.
+        // Satu panggilan = satu kuota RajaOngkir, jadi dibatasi per User; awalan
+        // `checkout-ongkir` membuat hitungannya terpisah dari route lain.
         Route::post('/ongkir', [CheckoutController::class, 'ongkir'])
+            ->middleware('throttle:10,1,checkout-ongkir')
             ->name('checkout.ongkir');
 
         // FR-CKOT-01 #1/#4/#5/#7: pesanan dibentuk dan stok direservasi.
+        // Lebih ketat dari hitung ongkir karena tiap pesanan mengunci stok.
         Route::post('/', [CheckoutController::class, 'buat'])
+            ->middleware('throttle:6,1,checkout-buat')
             ->name('checkout.buat');
     });
 

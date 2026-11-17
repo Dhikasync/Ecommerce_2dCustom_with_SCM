@@ -261,4 +261,79 @@ class RajaOngkirClientTest extends TestCase
 
         $this->client()->hitungOngkir('4816', '4816', 1000, 'jne');
     }
+
+    // ---------- Ketahanan terhadap gangguan pihak ketiga ----------
+
+    /** 5xx bisa pulih sendiri, jadi dicoba sekali lagi sebelum menyerah. */
+    public function test_status_500_diulang_sekali_sebelum_berhasil(): void
+    {
+        Http::fake([
+            '*' => Http::sequence()
+                ->pushStatus(500)
+                ->push($this->responsTarif()),
+        ]);
+
+        $hasil = $this->client()->hitungOngkir('4816', '4816', 1000, 'jne');
+
+        $this->assertSame('REG', $hasil[0]['layanan']);
+        Http::assertSentCount(2);
+    }
+
+    /** Kunci salah atau permintaan cacat tidak akan sembuh dengan diulang. */
+    public function test_status_4xx_tidak_diulang(): void
+    {
+        Http::fake(['*' => Http::response(['meta' => ['status' => 'error']], 401)]);
+
+        try {
+            $this->client()->cariLokasi('bandung');
+            $this->fail('Seharusnya melempar RajaOngkirException');
+        } catch (RajaOngkirException $e) {
+            $this->assertStringContainsString('status 401', $e->getMessage());
+        }
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_gangguan_koneksi_diulang_sekali_sebelum_berhasil(): void
+    {
+        $percobaan = 0;
+
+        Http::fake(function () use (&$percobaan) {
+            $percobaan++;
+
+            if ($percobaan === 1) {
+                throw new ConnectionException('Connection timed out');
+            }
+
+            return Http::response($this->responsTarif());
+        });
+
+        $hasil = $this->client()->hitungOngkir('4816', '4816', 1000, 'jne');
+
+        $this->assertSame(8000, $hasil[0]['biaya']);
+        // Percobaan yang melempar tidak tercatat sebagai request terkirim.
+        $this->assertSame(2, $percobaan);
+    }
+
+    /** `cost` menjadi `orders.ongkir`; angka nol atau negatif tidak boleh lolos. */
+    public function test_tarif_nol_atau_negatif_ditolak(): void
+    {
+        foreach ([0, -5000] as $biaya) {
+            Http::fake(['*' => Http::response($this->responsTarif([[
+                'name' => 'JNE',
+                'code' => 'jne',
+                'service' => 'REG',
+                'description' => 'Layanan Reguler',
+                'cost' => $biaya,
+                'etd' => '1 day',
+            ]]))]);
+
+            try {
+                $this->client()->hitungOngkir('4816', '4816', 1000, 'jne');
+                $this->fail('Seharusnya melempar RajaOngkirException untuk biaya '.$biaya);
+            } catch (RajaOngkirException $e) {
+                $this->assertStringContainsString('Tarif tidak wajar', $e->getMessage());
+            }
+        }
+    }
 }

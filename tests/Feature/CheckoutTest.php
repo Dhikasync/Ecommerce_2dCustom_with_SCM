@@ -609,6 +609,113 @@ class CheckoutTest extends TestCase
         ]);
     }
 
+    // ---------- Pengerasan input dan pembatas permintaan ----------
+
+    /** `is_numeric` meloloskan "1e3"/"1.5", lalu PostgreSQL menolak bind-nya jadi 500. */
+    public function test_item_ids_yang_bukan_bilangan_bulat_dijawab_404_bukan_500(): void
+    {
+        $this->alamatAsal();
+        $this->kurir();
+        Http::fake();
+
+        foreach ([['1e3'], ['1.5'], ['9999999999999999999999'], [''], [true], [['nested']]] as $masukan) {
+            $this->ringkasan($masukan)
+                ->assertStatus(404)
+                ->assertJsonPath('message', 'Item keranjang tidak ditemukan');
+        }
+
+        Http::assertNothingSent();
+    }
+
+    /**
+     * Tanpa batas, 66.000 id membuat PostgreSQL menolak jumlah parameter
+     * (maks 65.535) setelah 2,6 detik kerja query — jawabannya 500, bukan 404.
+     */
+    public function test_pilihan_item_dibatasi_dan_tidak_pernah_menjadi_500(): void
+    {
+        $this->alamatAsal();
+        $this->kurir();
+        $alamat = $this->alamat();
+        Http::fake();
+
+        foreach ([51, 66000] as $jumlah) {
+            $this->actingAs($this->user)->postJson('/checkout', [
+                'item_ids' => range(1, $jumlah),
+                'address_id' => $alamat->id,
+                'courier_id' => $this->kurir()->id,
+            ])
+                ->assertStatus(404)
+                ->assertJsonPath('message', 'Item keranjang tidak ditemukan');
+        }
+
+        Http::assertNothingSent();
+    }
+
+    /** Satu panggilan ongkir = satu kuota RajaOngkir (terukur 1 per panggilan). */
+    public function test_ongkir_dibatasi_sepuluh_permintaan_per_menit(): void
+    {
+        $this->alamatAsal();
+        Http::fake();
+
+        for ($i = 0; $i < 10; $i++) {
+            $this->actingAs($this->user)
+                ->postJson('/checkout/ongkir', [])
+                ->assertStatus(422);
+        }
+
+        $this->actingAs($this->user)
+            ->postJson('/checkout/ongkir', [])
+            ->assertStatus(429);
+    }
+
+    /** Membuat pesanan mereservasi stok, jadi pembatasnya lebih ketat dari hitung ongkir. */
+    public function test_buat_pesanan_dibatasi_enam_permintaan_per_menit(): void
+    {
+        $this->alamatAsal();
+        Http::fake();
+
+        for ($i = 0; $i < 6; $i++) {
+            $this->actingAs($this->user)
+                ->postJson('/checkout', [])
+                ->assertStatus(422);
+        }
+
+        $this->actingAs($this->user)
+            ->postJson('/checkout', [])
+            ->assertStatus(429);
+    }
+
+    /** Respons checkout memuat alamat dan nomor telepon: jangan disimpan cache. */
+    public function test_respons_checkout_tidak_disimpan_cache(): void
+    {
+        $this->alamatAsal();
+        $this->kurir();
+        $this->palsukanTarif([$this->tarif('REG', 8000)]);
+
+        $alamat = $this->alamat();
+        $item = $this->tambah($this->varian(), 1);
+
+        $ringkasan = $this->ringkasan([$item->id]);
+        $ringkasan->assertOk();
+        $this->assertStringContainsString('no-store', (string) $ringkasan->headers->get('Cache-Control'));
+
+        $ongkir = $this->actingAs($this->user)->postJson('/checkout/ongkir', [
+            'item_ids' => [$item->id],
+            'address_id' => $alamat->id,
+            'courier_id' => $this->kurir()->id,
+        ]);
+        $ongkir->assertOk();
+        $this->assertStringContainsString('no-store', (string) $ongkir->headers->get('Cache-Control'));
+
+        $pesanan = $this->actingAs($this->user)->postJson('/checkout', [
+            'item_ids' => [$item->id],
+            'address_id' => $alamat->id,
+            'courier_id' => $this->kurir()->id,
+        ]);
+        $pesanan->assertCreated();
+        $this->assertStringContainsString('no-store', (string) $pesanan->headers->get('Cache-Control'));
+    }
+
     public function test_ringkasan_custom_menampilkan_estimasi_sla_terpanjang(): void
     {
         $this->alamatAsal();
