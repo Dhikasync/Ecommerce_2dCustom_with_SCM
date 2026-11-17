@@ -8,6 +8,7 @@ use App\Models\CartItem;
 use App\Models\Design;
 use App\Models\Produk\Variant;
 use App\Support\GambarPublik;
+use App\Support\MasalahItemKeranjang;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -21,10 +22,6 @@ class KeranjangController extends Controller
     private const PESAN_KOSONG = 'Keranjang Anda kosong';
 
     private const PESAN_ITEM_TIDAK_DITEMUKAN = 'Item keranjang tidak ditemukan';
-
-    private const PESAN_PRODUK_TIDAK_TERSEDIA = 'Produk tidak tersedia';
-
-    private const PESAN_STOK = 'Stok tidak mencukupi';
 
     private const PESAN_CUSTOM_TANPA_DESAIN = 'Produk custom harus ditambahkan dari preview desain';
 
@@ -63,7 +60,7 @@ class KeranjangController extends Controller
         $varian = Variant::with('product')->find($data['variant_id']);
 
         if ($varian === null || ! $varian->product->is_aktif) {
-            return $this->tolak(self::PESAN_PRODUK_TIDAK_TERSEDIA);
+            return $this->tolak(MasalahItemKeranjang::PRODUK_TIDAK_TERSEDIA);
         }
 
         $desain = null;
@@ -167,13 +164,11 @@ class KeranjangController extends Controller
     private function periksaJumlah(Variant $varian, int $jumlah): ?JsonResponse
     {
         if ($jumlah < $varian->moq) {
-            return $this->tolak("Minimal pemesanan untuk varian ini adalah {$varian->moq} pcs");
+            return $this->tolak(MasalahItemKeranjang::moq($varian->moq));
         }
 
-        // Stok custom ikut membatasi: srs.md:116 menyatakan produk jadi dan custom
-        // memakai satuan stok yang sama, yaitu varian dasar (blanko).
         if ($jumlah > $varian->stok_tersedia) {
-            return $this->tolak(self::PESAN_STOK);
+            return $this->tolak(MasalahItemKeranjang::STOK);
         }
 
         return null;
@@ -211,7 +206,7 @@ class KeranjangController extends Controller
             'subtotal' => $item->quantity * $item->harga_satuan,
             // FR-CART-02 #1: item custom ditandai "Custom" di tampilan.
             'is_custom' => $item->design_id !== null,
-            'label' => $this->label($item),
+            'label' => MasalahItemKeranjang::label($item),
         ];
     }
 
@@ -232,31 +227,6 @@ class KeranjangController extends Controller
             'bisa_checkout' => $baris !== []
                 && collect($baris)->every(fn (array $satu) => $satu['label'] === null),
         ];
-    }
-
-    /**
-     * Skenario #2/#3 dan srs.md:516: stok, MOQ, dan produk aktif diperiksa ulang
-     * saat keranjang dibuka, bukan hanya saat item dimasukkan.
-     */
-    private function label(CartItem $item): ?string
-    {
-        $varian = $item->variant;
-
-        if (! $varian->product->is_aktif) {
-            return self::PESAN_PRODUK_TIDAK_TERSEDIA;
-        }
-
-        if ($item->quantity < $varian->moq) {
-            return "Minimal pemesanan untuk varian ini adalah {$varian->moq} pcs";
-        }
-
-        // Teksnya sama dengan pesan penolakan FR-CART-01: dokumen memakai satu
-        // kalimat untuk pesan maupun label.
-        if ($item->quantity > $varian->stok_tersedia) {
-            return self::PESAN_STOK;
-        }
-
-        return null;
     }
 
     private function tolak(string $pesan): JsonResponse

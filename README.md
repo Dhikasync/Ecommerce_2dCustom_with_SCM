@@ -19,8 +19,8 @@ Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS 
 | Autentikasi | FR-AUTH | ✅ lengkap: login Admin/User, registrasi, verifikasi email, ganti email dari profil, lupa/reset password, logout, middleware role |
 | Produk (admin) | FR-PROD | ✅ sisi admin: produk + gambar, varian (SKU/harga/berat/MOQ), kategori. Penegakan MOQ saat tambah ke keranjang sudah berjalan di FR-CART-01 |
 | Katalog produk | FR-KTLG | ✅ semua skenario: daftar produk (FR-KTLG-01), detail produk (FR-KTLG-02), filter kategori/jenis + pencarian + urut harga + reset filter (FR-KTLG-03) |
-| Keranjang & checkout | FR-CART | 🔄 berjalan: FR-CART-01 kelola keranjang (tambah/ubah/hapus, dua bagian jadi & custom, MOQ + Stok Tersedia) dan FR-CART-02 ringkasan (subtotal, total per bagian, label "Stok tidak mencukupi"/"Produk tidak tersedia", `bisa_checkout`). Sisi custom masih dummy (`design_id` diterima tanpa aturan "hanya dari preview") sampai FR-CDSN-04. Endpoint checkout menunggu FR-CKOT-01 |
-| Pesanan & pembayaran | FR-ORDR, FR-PAYM | ⏳ |
+| Keranjang & checkout | FR-CART, FR-CKOT | 🔄 berjalan: FR-CART-01 kelola keranjang, FR-CART-02 ringkasan (subtotal, label "Stok tidak mencukupi"/"Produk tidak tersedia", `bisa_checkout`), FR-CKOT-04 kurir + alamat asal toko, FR-CKOT-01 checkout (`GET /checkout`, `POST /checkout/ongkir`, `POST /checkout`: reservasi stok, pesanan Menunggu Pembayaran/Menunggu Validasi, salinan alamat). Sisi custom masih dummy (`design_id` diterima tanpa aturan "hanya dari preview") sampai FR-CDSN-04 |
+| Pesanan & pembayaran | FR-ORDR, FR-PAYM | ⏳ pesanan sudah dibentuk lewat FR-CKOT-01 (status, salinan alamat, reservasi stok); daftar/detail pesanan, pembayaran Midtrans, dan pembatalan belum ada |
 | Desain kustom 2D | FR-DSN | ⏳ |
 | Rantai pasok (SCM) | FR-SCM | ⏳ |
 | Profil & alamat | FR-PROF | ✅ semua skenario: lihat/ubah profil, ganti email, ubah password, cari lokasi, kelola alamat + alamat utama. Penjagaan hapus alamat yang dipakai pesanan berjalan menunggu modul pesanan (`srs.md:378`) |
@@ -52,23 +52,35 @@ app/
 │   │       ├── ProfilController.php     # lihat/ubah profil, ganti email, ubah password
 │   │       ├── AlamatController.php     # kelola alamat + alamat utama
 │   │       └── LokasiController.php     # pencarian lokasi (RajaOngkir)
+│   │   └── Checkout/
+│   │       ├── CheckoutController.php   # FR-CKOT-01: ringkasan, ongkir, buat pesanan
+│   │       ├── KurirController.php      # aktif/nonaktif layanan kurir (FR-CKOT-04)
+│   │       └── PengaturanPengirimanController.php  # alamat asal toko (FR-CKOT-04)
 │   └── Middleware/
 │       └── Auth/
 │           ├── EnsureUserHasRole.php    # pembatasan akses per role (FR-AUTH-01 #7)
 │           └── EnsureUserIsActive.php   # akun Nonaktif ditolak (FR-AUTH-01 #6)
 ├── Exceptions/
-│   └── Profil/RajaOngkirException.php   # kegagalan layanan pencarian lokasi
+│   ├── Checkout/
+│   │   ├── KeranjangBerubah.php         # item bermasalah saat pesanan dibentuk (#7)
+│   │   └── OngkirTidakTersedia.php      # ongkir gagal dihitung (#8)
+│   └── Profil/RajaOngkirException.php   # kegagalan layanan pencarian lokasi dan tarif
 ├── Mail/
 │   └── Auth/
 │       ├── VerifyEmailMail.php          # email verifikasi bertoken
 │       ├── VerifyNewEmailMail.php       # tautan konfirmasi email baru (FR-AUTH-06 #7)
 │       ├── EmailChangeNoticeMail.php    # pemberitahuan ke email lama
 │       └── ResetPasswordMail.php        # email reset password bertoken
+├── Console/Commands/
+│   └── SinkronLayananKurir.php          # isi layanan kurir dari RajaOngkir (FR-CKOT-04)
 ├── Rules/NomorTelepon.php               # format nomor telepon +62 (dipakai auth + profil)
+├── Support/
+│   ├── GambarPublik.php                 # URL gambar dari disk publik
+│   └── MasalahItemKeranjang.php         # label masalah item, dipakai keranjang + checkout
 ├── Services/
 │   └── Profil/
 │       ├── LokasiDitawarkan.php         # ingatan hasil pencarian lokasi (24 jam)
-│       └── RajaOngkir.php               # client pencarian lokasi
+│       └── RajaOngkir.php               # client RajaOngkir: pencarian lokasi + tarif
 └── Models/
     ├── Auth/
     │   └── User.php                     # model modul auth (27 model total sesuai skema SRS)
@@ -121,6 +133,8 @@ DB_PORT=5432
 DB_DATABASE=nichibag_db
 DB_USERNAME=postgres
 DB_PASSWORD=...
+RAJAONGKIR_API_KEY=...          # kosong membuat pencarian lokasi dan ongkir gagal
+RAJAONGKIR_BASE_URL=https://rajaongkir.komerce.id/api/v1
 ```
 
 Lalu:
@@ -130,6 +144,42 @@ php artisan migrate
 php artisan storage:link   # agar gambar produk di storage/app/public bisa diakses lewat /storage
 php artisan serve          # http://127.0.0.1:8000
 ```
+
+Urutan penyiapan data awal: akun Admin dibuat di luar aplikasi, alamat asal toko diisi
+lewat `PUT /admin/pengaturan-pengiriman`, lalu daftar layanan kurir diisi dari RajaOngkir:
+
+```bash
+# Rute contoh antar kota: layanan yang tersimpan adalah yang benar-benar dijual.
+php artisan rajaongkir:sinkron-layanan --kurir=jne,pos,tiki --tujuan=17601
+
+# Asal dari pengaturan pengiriman; --asal dipakai kalau ingin kode lain.
+php artisan rajaongkir:sinkron-layanan --asal=4816 --tujuan=17601
+```
+
+Perintah ini memakai kuota RajaOngkir (satu permintaan per kurir) dan butuh jaringan.
+Layanan yang didapat tersimpan sebagai **nonaktif**; Admin memilih mana yang ditawarkan.
+
+Tanpa `--tujuan`, rute contohnya asal ke asal. Rute satu kecamatan hanya menawarkan
+layanan dalam kota (`CTC`) dan truk (`JTR`), bukan `REG`/`YES` antar kota, sehingga
+perintah memberi peringatan dan hasilnya tidak mewakili layanan yang dijual toko.
+
+Kuota RajaOngkir dihitung **per panggilan HTTP**, bukan per endpoint: pencarian lokasi
+(`GET /lokasi`) sama mahalnya dengan hitung tarif (`POST /checkout/ongkir`). Karena itu
+batasi `--kurir` ke kurir yang dipakai, dan jangan jalankan sinkronisasi berulang tanpa
+alasan — hasilnya idempoten di database, tetapi tetap memotong kuota.
+
+Di Windows, `php.ini` sering tidak punya CA bundle sehingga panggilan nyata gagal dengan
+`cURL error 60: SSL certificate ... unable to get local issuer certificate`. Perbaikannya
+di luar repo:
+
+```ini
+; php.ini
+curl.cainfo = "D:\php\extras\ssl\cacert.pem"
+openssl.cafile = "D:\php\extras\ssl\cacert.pem"
+```
+
+Berkas CA-nya diunduh dari `https://curl.se/ca/cacert.pem`. Tanpa itu `GET /lokasi` dan
+`POST /checkout/ongkir` dijawab `422` walau `RAJAONGKIR_API_KEY` benar.
 
 ## Pengujian
 
@@ -195,6 +245,14 @@ Semua route dipisah per modul di `routes/*.php` dan memakai session guard. Respo
 | POST | `/keranjang/item` | `keranjang.item.store` | `auth`, `active` | FR-CART-01 #1/#2 - tambah item: `variant_id`, `quantity`, `design_id` (custom). Varian sama digabung. `422` "Minimal pemesanan untuk varian ini adalah {moq} pcs" / "Stok tidak mencukupi" / "Produk tidak tersedia" / "Produk custom harus ditambahkan dari preview desain"; `404` "Desain tidak ditemukan" |
 | PATCH | `/keranjang/item/{id}` | `keranjang.item.update` | `auth`, `active` | FR-CART-01 #3 - ubah `quantity` saja; MOQ dan Stok Tersedia diperiksa ulang, `harga_satuan` tidak berubah. `404` "Item keranjang tidak ditemukan" untuk item User lain |
 | DELETE | `/keranjang/item/{id}` | `keranjang.item.destroy` | `auth`, `active` | FR-CART-01 #4 - hapus item; `404` "Item keranjang tidak ditemukan" untuk item User lain |
+| GET | `/checkout?item_ids[]=` | `checkout.tampil` | `auth`, `active` | FR-CKOT-01 #2/#3/#6 + FR-CART-01 #4/#5 - ringkasan sebelum pesanan dibentuk: `items`, `subtotal_barang`, `berat_total`, `alamat.dipilih` (alamat utama **hanya** bila lokasinya terisi) + `alamat.daftar` (`bisa_dipakai`, `catatan` "Lengkapi lokasi"), `kurir` aktif saja, `sla_hari` + `estimasi_sla`. `422` "Pilih minimal satu item untuk di-checkout" / "Produk jadi dan produk custom di-checkout terpisah, selesaikan salah satunya terlebih dahulu"; `404` "Item keranjang tidak ditemukan" |
+| POST | `/checkout/ongkir` | `checkout.ongkir` | `auth`, `active`, throttle 10/menit | FR-CKOT-01 #3/#8 - `item_ids[]`, `address_id`, `courier_id` → `subtotal_barang`, `berat_total`, `ongkir`, `total`. Gangguan RajaOngkir diulang sekali, lalu `422` "Alamat dan kurir wajib dipilih" (termasuk alamat tanpa lokasi, kurir nonaktif, atau alamat User lain) / "Ongkir belum dapat dihitung, silakan coba lagi". `Cache-Control: no-store` |
+| POST | `/checkout` | `checkout.buat` | `auth`, `active`, throttle 6/menit | FR-CKOT-01 #1/#4/#5/#7 - buat pesanan: status `menunggu_pembayaran` (jadi, `kadaluwarsa_pada` +24 jam) atau `menunggu_validasi` (custom), `status_pembayaran` "belum_dibayar", `status_desain` "tidak_ada"/"menunggu_validasi", salinan alamat, Stok Direservasi naik, item terpilih keluar dari keranjang. `ongkir` dan `total` dari body diabaikan. `422` "Keranjang berubah, periksa kembali item Anda" + `data.items[].label`. `Cache-Control: no-store` |
+| GET | `/admin/kurir` | `kurir.index` | `auth`, `active`, `role:admin_ecommerce` | FR-CKOT-04 #2/#3 - daftar **semua** layanan kurir (`kode`, `nama`, `layanan`, `is_aktif`), termasuk yang nonaktif. Tidak ada route tambah: barisnya hasil `php artisan rajaongkir:sinkron-layanan` |
+| PUT | `/admin/kurir/{id}/aktif` | `kurir.aktif` | `auth`, `active`, `role:admin_ecommerce` | FR-CKOT-04 #2 - aktifkan layanan; `404` "Kurir tidak ditemukan" |
+| PUT | `/admin/kurir/{id}/nonaktif` | `kurir.nonaktif` | `auth`, `active`, `role:admin_ecommerce` | FR-CKOT-04 #3/#4 - nonaktifkan layanan; `422` "Minimal satu layanan kurir harus aktif" bila itu yang terakhir |
+| GET | `/admin/pengaturan-pengiriman` | `pengaturan-pengiriman.tampil` | `auth`, `active`, `role:admin_ecommerce` | FR-CKOT-04 #1 - alamat asal toko (`alamat_jalan`, `kode_lokasi`, `label_lokasi`), `data` null bila belum diisi |
+| PUT | `/admin/pengaturan-pengiriman` | `pengaturan-pengiriman.simpan` | `auth`, `active`, `role:admin_ecommerce` | FR-CKOT-04 #1 - simpan alamat asal; `kode_lokasi` wajib berasal dari `/lokasi`, label dari klien diabaikan, `422` "Lokasi tidak ditemukan, coba kata kunci lain" |
 | GET | `/admin/kategori` | `kategori.index` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - daftar kategori urut nama |
 | POST | `/admin/kategori` | `kategori.store` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - tambah kategori (nama unik tanpa beda huruf) |
 | PUT | `/admin/kategori/{id}` | `kategori.update` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - ubah nama/deskripsi |
@@ -269,7 +327,31 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Urutan label validasi**: `"Produk tidak tersedia"` (produk dinonaktifkan) lebih dulu, lalu pesan MOQ, lalu `"Stok tidak mencukupi"`. Produk nonaktif membuat item tidak bisa dibeli sama sekali, sedangkan MOQ dan stok sama-sama bisa dibereskan dengan mengubah jumlah; satu label saja per item supaya tampilan tidak perlu memilih.
 - **Label MOQ memakai pesan FR-PROD-03 #2** (`"Minimal pemesanan untuk varian ini adalah {moq} pcs"`) karena dokumen tidak menyediakan label khusus MOQ di keranjang, sementara srs.md:516 tetap meminta MOQ divalidasi saat ringkasan dibuka. Keadaan ini muncul ketika Admin menaikkan MOQ setelah item masuk keranjang.
 - **Validasi harga (FR-CART-02)**: yang diperiksa adalah perhitungan ulang `subtotal = quantity x harga_satuan`, memakai harga yang sudah dikunci saat item masuk (FR-CART-01 #6), bukan harga katalog terbaru. Tidak ada peringatan "harga berubah" karena perubahan harga katalog memang tidak boleh mengubah isi keranjang.
-- **Endpoint checkout keranjang ditunda ke FR-CKOT-01** (keputusan): skenario #4 (mengarahkan ke halaman checkout) dan #5 (menolak pilihan dari dua bagian sekaligus) belum dapat diuji tanpa halaman checkout. Bentuk pilihan yang akan dipakai sudah ditetapkan: `item_ids[]` per item, dengan pilihan kosong dijawab `422` "Pilih minimal satu item untuk di-checkout" dan id milik User lain dijawab `404` "Item keranjang tidak ditemukan".
+- **Bentuk pilihan checkout `item_ids[]`** (keputusan, kini dipakai): skenario FR-CART-01 #4/#5 menuntut keranjang mengirim "item yang dipilih", dan dokumen tidak menetapkan bentuknya. Dipilih daftar id per baris keranjang, bukan per bagian, karena satu bagian bisa berisi beberapa item dan User boleh memilih sebagian. Pilihan kosong dijawab `422` "Pilih minimal satu item untuk di-checkout"; id milik User lain dijawab `404` "Item keranjang tidak ditemukan" mengikuti NFR-SEC-03.
+- **Ongkir dan total selalu dihitung ulang di server**: `POST /checkout` mengabaikan `ongkir`/`total` yang dikirim klien. Angka uang tidak boleh berasal dari browser, dan skenario #3 memang menetapkan sistem yang menghitung dari berat total + rute.
+- **Alamat/kurir yang tidak bisa dipakai memakai kalimat #4 yang sama**: alamat tanpa lokasi (skenario #2), alamat milik User lain, dan kurir yang sudah dinonaktifkan semuanya dijawab `422` "Alamat dan kurir wajib dipilih". Satu kalimat dipakai supaya keberadaan data User lain tidak terbuka, dan supaya tidak ada pesan baru yang tidak ada di dokumen.
+- **Alamat asal toko kosong atau layanan tidak dikembalikan API = ongkir tidak tersedia**: keduanya dijawab `422` "Ongkir belum dapat dihitung, silakan coba lagi" (skenario #8). Ongkir **tidak pernah** jatuh ke Rp 0, sesuai `srs.md:520`. Konsekuensinya checkout berhenti sampai Admin melengkapi alamat asal dan `rajaongkir:sinkron-layanan` dijalankan.
+- **Reservasi stok memakai `lockForUpdate`, tanpa baris `stock_movements`**: NFR-PRF-05 menuntut reservasi atomik, jadi stok diperiksa ulang di dalam transaksi setelah baris varian dikunci (bukan dari bacaan sebelum transaksi). Kartu stok tidak dicatat di sini karena `stock_movements.tipe` hanya punya `stok_awal`, `penjualan`, `restock`, `pembatalan`, `penyesuaian` (`srs.md:642`); reservasi bukan pergerakan stok fisik, dan `penjualan` baru dicatat saat Lunas.
+- **`status_pembayaran` diturunkan, bukan baris `payments`**: Lampiran A menyebut "Belum Dibayar" = pesanan dibuat dan belum ada pembayaran, jadi checkout tidak membuat baris `payments`. Baris dan `snap_token` milik FR-PAYM-01 saat transaksi gateway dimulai; sebelum itu statusnya dihitung (`latestPayment?->status ?? 'belum_dibayar'`).
+- **`status_desain` "Tidak Ada" bukan nilai kolom**: `designs.status` hanya punya `draft`, `menunggu_validasi`, `perlu_revisi`, `disetujui`, `kedaluwarsa`. "Tidak Ada" dari Lampiran A adalah keadaan "pesanan produk jadi", jadi dikirim sebagai `tidak_ada` di respons, bukan disimpan.
+- **Nomor pesanan `INV-<ULID>`**: dokumen hanya mewajibkan `nomor_pesanan` unik. ULID dipilih karena tidak perlu membaca ulang baris setelah insert (kolomnya NOT NULL) dan urut waktu, sehingga mudah ditelusuri; formatnya boleh berubah tanpa mengubah aturan bisnis.
+- **Pesan "Keranjang berubah, periksa kembali item Anda" adalah pilihan implementasi**: skenario #7 hanya menetapkan sistem membatalkan pembuatan pesanan dan menampilkan penjelasan item bermasalah, tanpa kalimat baku. Yang dipakai sebagai penjelasan adalah `label` item dari dokumen ("Produk tidak tersedia", "Stok tidak mencukupi", pesan MOQ). Pemeriksaan yang sama diulang di dalam transaksi; kalau stok habis di antara dua langkah, jawabannya tetap `422` dengan label yang sama.
+- **SLA pesanan memakai yang terpanjang**: FR-CDSN-06 menetapkan estimasi per produk custom, sedangkan checkout bisa berisi beberapa produk. Produksi baru selesai setelah item paling lama ikut selesai, jadi respons memakai `max(sla_hari)` dan `order_items.sla_hari` menyimpan salinan per item (FR-CDSN-07 #3: pesanan berjalan tidak ikut berubah saat SLA produk diubah).
+- **Pesanan custom tanpa `kadaluwarsa_pada`**: batas 24 jam hanya berlaku pada "Menunggu Pembayaran" (Lampiran A, `srs.md:822`), sedangkan pesanan custom lahir "Menunggu Validasi" dan baru masuk batas bayar setelah desain disetujui (FR-PAYM-02).
+- **Batas 50 item per checkout**: bukan aturan dokumen, melainkan batas teknis. PostgreSQL menolak lebih dari 65.535 parameter; tanpa batas, 66.000 id menghasilkan kira-kira 2,6 detik kerja query lalu `500`. Id yang bentuknya bukan bilangan bulat (`1e3`, `1.5`, `true`, larik bersarang) dijawab `404` "Item keranjang tidak ditemukan", **bukan** `422` "Pilih minimal satu item untuk di-checkout": pilihan kosong dan id yang tidak dikenali adalah dua keadaan berbeda, dan `is_numeric` meloloskan bentuk yang kemudian ditolak PostgreSQL sebagai bigint.
+- **Throttle 10/menit untuk `POST /checkout/ongkir` dan 6/menit untuk `POST /checkout`**: bukan aturan dokumen. Satu panggilan ongkir memotong satu kuota RajaOngkir (terukur: 4 panggilan = 4/100), sehingga satu akun bisa menghentikan seluruh penjualan; dan tiap pesanan mengunci stok, sehingga pembuatan pesanan tanpa batas mengunci stok untuk semua User. Keduanya memakai awalan `checkout-ongkir` dan `checkout-buat` supaya hitungannya terpisah — tanpa awalan, Laravel memakai satu kunci per User untuk semua route, sehingga batas 6 akan menimpa batas 10.
+- **Gangguan RajaOngkir diulang satu kali**: hanya gangguan koneksi dan balasan `5xx`, dengan jeda 200 ms. `4xx` tidak diulang karena kunci salah atau permintaan cacat tidak akan sembuh dengan pengulangan. Pengulangan ini tidak mengubah kontrak: kalau tetap gagal, jawabannya `422` "Ongkir belum dapat dihitung, silakan coba lagi" seperti skenario #8, dan pesanan tetap tidak dibuat (`srs.md:521`).
+- **`cost` dari RajaOngkir diperiksa sebelum menjadi uang**: harus bilangan bulat positif. Nilai `0` atau negatif ditolak dan alurnya jatuh ke pesan #8, karena `srs.md:520` melarang ongkir "diam-diam menjadi Rp 0" — dan nilai negatif akan menurunkan total pesanan.
+- **`Cache-Control: no-store` pada tiga respons checkout**: bukan aturan dokumen. Respons memuat alamat lengkap dan nomor telepon, jadi tidak boleh tinggal di cache browser atau proksi bersama.
+- **Reservasi yang kedaluwarsa belum dirilis otomatis** (utang tercatat): `orders.kadaluwarsa_pada` sudah ditulis, tetapi belum ada perintah terjadwal yang membatalkan pesanan dan mengembalikan `stok_direservasi`. Sampai itu ada, stok yang sudah direservasi hanya kembali lewat admin. Aturannya sudah ada di Lampiran A ("Kedaluwarsa menjadi Dibatalkan"), jadi ini pekerjaan yang belum dikerjakan, bukan aturan baru.
+- **Rute contoh sinkronisasi ditentukan `--tujuan`, bukan asal = tujuan**: `service` hanya keluar per rute, dan rute dalam satu kecamatan hanya memberi `CTC`/`JTR*`, bukan `REG`/`YES`. Tanpa `--tujuan` perintah tetap berjalan (perilaku lama) tetapi memberi peringatan, supaya alasan hasilnya tidak mewakili layanan antar kota terlihat langsung, bukan baru ketahuan setelah tabel terisi.
+- **`filter=lowest` tidak dikirim ke RajaOngkir**: parameter itu sudah dicoba pada rute nyata dan diabaikan — tujuh layanan tetap dikembalikan. Membiarkannya di kode membuat pembaca mengira daftar tarif sudah disaring, padahal penyaringan yang benar dilakukan dengan `firstWhere('layanan', ...)` di `biayaOngkir()`. Yang disimpan tetap apa adanya dari API, sesuai `srs.md:809`.
+- **Daftar kurir dan layanan berasal dari RajaOngkir, bukan daftar tulisan tangan (FR-CKOT-04 #2)**: `srs.md:228` dan `:289` menyatakan layanan kurir yang didukung datang dari API Kurir, dan `srs.md:809` melarang membangun komponen tarif sendiri. Karena RajaOngkir tidak punya endpoint "daftar layanan" — `service` seperti `REG`/`YES`/`OKE` hanya keluar dari `POST /calculate/domestic-cost` untuk satu rute tertentu — daftar diisi perintah `php artisan rajaongkir:sinkron-layanan`, bukan seeder. Yang tetap statis hanya **kode** kurir (17 kode dari dokumentasi RajaOngkir) karena itu memang kontrak, bukan hasil panggilan. Dokumen tetap tidak punya skenario menambah layanan dari aplikasi, jadi tidak ada route tambah; baris baru lahir `is_aktif = false` dan `is_aktif` baris lama tidak disentuh supaya sinkronisasi ulang tidak menghidupkan layanan yang sudah dimatikan Admin.
+- **Keterbatasan sinkronisasi layanan**: perintah memakai satu rute contoh (berat 1000 g), jadi layanan yang hanya tersedia di rute lain bisa tidak ikut tersimpan. Berat tidak mengubah daftar layanan, hanya tarifnya. Rute contoh dipilih sekali dan tidak disimpan sebagai aturan bisnis.
+- **Aktif dan nonaktif sebagai dua endpoint, bukan satu `PUT {is_aktif}`**: penolakan FR-CKOT-04 #4 hanya berlaku pada aksi mematikan layanan terakhir. Memisahkan URL membuat niat User terbaca dari route, bukan dari isi body yang bisa salah bentuk, dan pesan penolakan tidak pernah muncul saat Admin justru sedang mengaktifkan.
+- **Penjagaan "minimal satu layanan aktif" hidup di controller**: aturan ini menghitung baris **lain**, sedangkan `CHECK` constraint PostgreSQL tidak bisa melakukannya. Konsekuensi yang diterima: dua permintaan nonaktif yang benar-benar bersamaan masih bisa menurunkan jumlah layanan aktif menjadi nol — hutang yang sama dengan keunikan nama kategori (lihat butir di atas), dan tidak ditutup dengan `lockForUpdate` karena menambah kunci tabel untuk keadaan yang belum pernah terjadi.
+- **Alamat asal toko memakai `LokasiDitawarkan` yang sama dengan alamat User**: FR-CKOT-04 #1 secara eksplisit merujuk FR-PROF-01 #11/#12, jadi kode lokasi wajib berasal dari hasil `GET /lokasi` dan `label_lokasi` kiriman klien diabaikan. Tabelnya `shop_settings` dengan `CHECK (id = 1)`; karena `id` tidak ada di `$fillable`, baris pertama dibuat dengan `id = 1` ditulis eksplisit — `updateOrCreate(['id' => 1], ...)` akan membuang `id` saat insert dan gagal begitu urutan id sudah lewat dari 1.
+- **Urutan daftar kurir**: `kode` lalu `layanan`, supaya layanan satu kurir berdekatan. Dokumen tidak mengatur urutan, jadi test memeriksa keanggotaan (`assertJsonFragment`), bukan indeks larik.
 
 ## Aturan proyek yang tidak boleh dilanggar
 
