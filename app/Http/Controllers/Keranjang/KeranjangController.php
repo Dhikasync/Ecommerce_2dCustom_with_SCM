@@ -178,8 +178,9 @@ class KeranjangController extends Controller
             return $this->tolak("Minimal pemesanan untuk varian ini adalah {$varian->moq} pcs");
         }
 
-        // Produk custom dibuat sesuai pesanan, jadi stok gudang tidak membatasinya.
-        if (! $varian->product->isCustom() && $jumlah > $varian->stok_tersedia) {
+        // Stok custom ikut membatasi: srs.md:116 menyatakan produk jadi dan custom
+        // memakai satuan stok yang sama, yaitu varian dasar (blanko).
+        if ($jumlah > $varian->stok_tersedia) {
             return $this->tolak(self::PESAN_STOK);
         }
 

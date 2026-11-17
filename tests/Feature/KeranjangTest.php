@@ -232,7 +232,7 @@ class KeranjangTest extends TestCase
             ->assertJsonCount(0, 'data.custom');
     }
 
-    /** Skenario #2 (dummy): item custom masuk ke bagian terpisah. */
+    /** FR-CART-01 #2 (dummy): item custom masuk ke bagian terpisah. */
     public function test_item_custom_masuk_ke_bagian_terpisah(): void
     {
         $varian = $this->varian([], ['tipe' => 'custom', 'sla_hari' => 3]);
@@ -251,6 +251,27 @@ class KeranjangTest extends TestCase
             ->assertJsonCount(0, 'data.jadi')
             ->assertJsonCount(1, 'data.custom')
             ->assertJsonPath('data.custom.0.design_id', $desain->id);
+    }
+
+    /**
+     * srs.md:116: "Keduanya memakai satuan stok yang sama" termasuk varian dasar
+     * (blanko) produk custom, jadi stok gudang ikut membatasi item custom.
+     */
+    public function test_stok_custom_juga_dibatasi_stok_varian(): void
+    {
+        $varian = $this->varian(['stok_fisik' => 1], ['tipe' => 'custom', 'sla_hari' => 3]);
+        $desain = $this->desain($varian);
+
+        $this->actingAs($this->user)
+            ->postJson('/keranjang/item', [
+                'variant_id' => $varian->id,
+                'quantity' => 2,
+                'design_id' => $desain->id,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Stok tidak mencukupi');
+
+        $this->assertDatabaseCount('cart_items', 0);
     }
 
     /** FR-CART-01 #2: produk custom tidak boleh masuk tanpa desain. */

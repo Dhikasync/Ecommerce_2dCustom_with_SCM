@@ -527,7 +527,7 @@ class KatalogTest extends TestCase
         $this->assertArrayNotHasKey('message', $respons->json());
     }
 
-    /** `%` dan `_` adalah wildcard LIKE; keduanya harus dicari sebagai teks biasa. */
+    /** `%` adalah wildcard LIKE; harus dicari sebagai teks biasa. */
     public function test_karakter_wildcard_dicari_sebagai_teks(): void
     {
         $this->produk(['nama' => 'Diskon 100%']);
@@ -537,6 +537,18 @@ class KatalogTest extends TestCase
             ->assertOk()
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.nama', 'Diskon 100%');
+    }
+
+    /** `_` mencocokkan tepat satu karakter, jadi harus di-escape juga. */
+    public function test_garis_bawah_wildcard_dicari_sebagai_teks(): void
+    {
+        $this->produk(['nama' => 'Tas_100']);
+        $this->produk(['nama' => 'TasX100']);
+
+        $this->getJson('/katalog?q=Tas_100')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.nama', 'Tas_100');
     }
 
     /** Keputusan README: nilai filter tidak sah berarti tidak ada yang cocok. */
