@@ -13,3 +13,6 @@ Route::get('/katalog', [KatalogController::class, 'daftar'])
 
 Route::get('/katalog/{id}', [KatalogController::class, 'detail'])
     ->name('katalog.show');
+
+Route::get('/kategori', [KatalogController::class, 'kategori'])
+    ->name('katalog.kategori');

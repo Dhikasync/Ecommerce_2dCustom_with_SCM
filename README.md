@@ -18,7 +18,7 @@ Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS 
 | --- | --- | --- |
 | Autentikasi | FR-AUTH | ✅ lengkap: login Admin/User, registrasi, verifikasi email, ganti email dari profil, lupa/reset password, logout, middleware role |
 | Produk (admin) | FR-PROD | ✅ sisi admin: produk + gambar, varian (SKU/harga/berat/MOQ), kategori. Penegakan MOQ saat tambah ke keranjang menyusul di modul CART (FR-PROD-03 #2/#3) |
-| Katalog produk | FR-KTLG | 🔄 berjalan: FR-KTLG-01 daftar katalog (produk aktif, harga termurah, badge Custom, status stok, paginasi, rating) dan FR-KTLG-02 detail produk (galeri, deskripsi, varian + Stok Tersedia, 404). Filter dan pencarian menyusul (FR-KTLG-03) |
+| Katalog produk | FR-KTLG | ✅ semua skenario: daftar produk (FR-KTLG-01), detail produk (FR-KTLG-02), filter kategori/jenis + pencarian + urut harga + reset filter (FR-KTLG-03) |
 | Keranjang & checkout | FR-CART | ⏳ |
 | Pesanan & pembayaran | FR-ORDR, FR-PAYM | ⏳ |
 | Desain kustom 2D | FR-DSN | ⏳ |
@@ -188,8 +188,9 @@ Semua route dipisah per modul di `routes/*.php` dan memakai session guard. Respo
 | PUT | `/profil/alamat/{id}/utama` | `alamat.utama` | `auth`, `active` | FR-PROF-01 #7 — tandai alamat utama |
 | PUT | `/profil/email` | `profil.email.ajukan` | `auth`, `active`, throttle 6/menit | FR-PROF-01 #8 — ajukan email baru; email lama tetap berlaku |
 | GET | `/profil/email/verify/{id}/{hash}` | `profil.email.verify` | `signed`, throttle 6/menit | FR-AUTH-06 #7 — konfirmasi email baru (tautan 24 jam, sekali pakai) |
-| GET | `/katalog` | `katalog.index` | — | FR-KTLG-01, UC-12 — daftar produk aktif: foto, nama, badge Custom, `harga_mulai` dari varian termurah, MOQ terkecil, `status_stok`, rating, paginasi `per_page` (12, maks 50) |
+| GET | `/katalog` | `katalog.index` | — | FR-KTLG-01, UC-12 — daftar produk aktif: foto, nama, badge Custom, `harga_mulai` dari varian termurah, MOQ terkecil, `status_stok`, rating, paginasi `per_page` (12, maks 50). FR-KTLG-03 — filter `kategori_id`, `jenis` (`jadi`/`custom`), cari `q`, urut `harga_asc` |
 | GET | `/katalog/{id}` | `katalog.show` | — | FR-KTLG-02, UC-13 — detail produk: galeri, deskripsi, kategori, `harga_mulai`, dan `varian` (ukuran/warna/ketebalan, harga, berat, MOQ, `stok_tersedia`). `404` "Produk tidak ditemukan" untuk produk terhapus, nonaktif, atau id non-angka |
+| GET | `/kategori` | `katalog.kategori` | — | FR-KTLG-03 #1 — daftar kategori publik untuk pilihan filter: `id` dan `nama`, urut nama |
 | GET | `/admin/kategori` | `kategori.index` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - daftar kategori urut nama |
 | POST | `/admin/kategori` | `kategori.store` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - tambah kategori (nama unik tanpa beda huruf) |
 | PUT | `/admin/kategori/{id}` | `kategori.update` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - ubah nama/deskripsi |
@@ -246,6 +247,10 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Produk nonaktif di halaman detail**: katalog menyembunyikan produk nonaktif (FR-PROD-01 #6), jadi detailnya dijawab `404` "Produk tidak ditemukan" — link lama mati, bukan halaman tanpa tombol beli. Id non-angka dijawab `404` yang sama sebelum menyentuh query PostgreSQL, supaya `/katalog/abc` tidak menjadi error 500.
 - **Stok dan tombol di detail (FR-KTLG-02 #2/#3/#4)**: `varian` mengirim `stok_tersedia` berupa angka (`stok_fisik - stok_direservasi`), bukan `status_stok` seperti kartu, karena label "Stok Habis" butuh angka nol dan validasi MOQ butuh jumlah. Tombol "Kustomisasi Desain" ditentukan tampilan dari `is_custom`; alamat editor belum ada karena FR-CDSN-02 belum dibangun.
 - **Rating tidak dikirim di detail produk**: FR-KTLG-02 tidak memintanya; hanya kartu katalog yang meminta rating dan jumlah ulasan (SRS 4.4.2).
+- **Filter katalog (FR-KTLG-03)**: parameter `kategori_id`, `jenis` (`jadi`/`custom`), `q` (nama produk), dan `urut=harga_asc`. Nilai filter yang tidak sah (`?jenis=apa-saja`, `?kategori_id=abc`, `?kategori_id=999`) diperlakukan sebagai filter yang tidak cocok: hasil kosong dengan pesan filter, bukan `422` — dokumen hanya mengenal dua keadaan, cocok dan tidak cocok, dan skenario #4 sudah menyediakan pesannya.
+- **Pesan kosong berlapis**: dokumen punya tiga pesan kosong. Urutannya `q` ada → "Produk tidak ditemukan" (skenario #8 menang walau filter juga aktif), filter ada tanpa `q` → "Tidak ada produk yang sesuai dengan filter ini", tanpa parameter apa pun → "Belum ada produk tersedia". `q` yang hanya berisi spasi dianggap tidak ada.
+- **Pencarian dan urutan harga**: kata kunci dicocokkan ke `nama` dengan `ilike` (tanpa beda huruf besar-kecil) karena skenario #7 menyebut "nama produk", dan `%`/`_` di-escape agar dicari sebagai teks biasa. `urut=harga_asc` memakai `coalesce(varian termurah, harga_dasar)` — angka yang sama dengan `harga_mulai` di kartu — lalu `nama` sebagai pengurut kedua agar halaman stabil; nilai `urut` lain kembali ke urutan nama.
+- **Daftar kategori publik (`GET /kategori`)**: skenario #1 meminta User memilih kategori, tetapi `GET /admin/kategori` butuh login. Endpoint publik berisi `id` dan `nama` semua kategori, termasuk yang belum punya produk aktif — keadaan itu sudah diatur skenario #4 (filter tanpa hasil). Daftar ini tidak dititipkan ke `meta` katalog supaya tidak ikut terkirim di setiap halaman dan setiap scroll.
 - **Serialisasi tanggal ke JSON masih UTC** (hutang, bukan keputusan): `toJson()` model mengirim `2026-11-12T05:57:47.000000Z`, bukan `+07:00`. Saat ini belum ada endpoint yang mengirim timestamp mentah — semua respons menulis kolom satu per satu — jadi belum melanggar NFR-LOC-01. Begitu modul Pesanan/Notifikasi mulai mengirim waktu, tanggal harus diformat WIB di lapisan respons (misalnya `->format('Y-m-d\TH:i:sP')`) atau lewat satu `serializeDate()` bersama, bukan dibiarkan `Z`.
 - **Pesan `"Kategori tidak ditemukan"`**: dokumen hanya menetapkan pesan duplikat dan pesan kategori terpakai (`srs.md:406-407`); pesan untuk id yang tidak ada mengikuti pola `"Alamat tidak ditemukan"` dan dijawab `404`.
 
