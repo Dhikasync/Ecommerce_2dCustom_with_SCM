@@ -52,23 +52,28 @@ app/
 │   │       ├── ProfilController.php     # lihat/ubah profil, ganti email, ubah password
 │   │       ├── AlamatController.php     # kelola alamat + alamat utama
 │   │       └── LokasiController.php     # pencarian lokasi (RajaOngkir)
+│   │   └── Checkout/
+│   │       ├── KurirController.php      # aktif/nonaktif layanan kurir (FR-CKOT-04)
+│   │       └── PengaturanPengirimanController.php  # alamat asal toko (FR-CKOT-04)
 │   └── Middleware/
 │       └── Auth/
 │           ├── EnsureUserHasRole.php    # pembatasan akses per role (FR-AUTH-01 #7)
 │           └── EnsureUserIsActive.php   # akun Nonaktif ditolak (FR-AUTH-01 #6)
 ├── Exceptions/
-│   └── Profil/RajaOngkirException.php   # kegagalan layanan pencarian lokasi
+│   └── Profil/RajaOngkirException.php   # kegagalan layanan pencarian lokasi dan tarif
 ├── Mail/
 │   └── Auth/
 │       ├── VerifyEmailMail.php          # email verifikasi bertoken
 │       ├── VerifyNewEmailMail.php       # tautan konfirmasi email baru (FR-AUTH-06 #7)
 │       ├── EmailChangeNoticeMail.php    # pemberitahuan ke email lama
 │       └── ResetPasswordMail.php        # email reset password bertoken
+├── Console/Commands/
+│   └── SinkronLayananKurir.php          # isi layanan kurir dari RajaOngkir (FR-CKOT-04)
 ├── Rules/NomorTelepon.php               # format nomor telepon +62 (dipakai auth + profil)
 ├── Services/
 │   └── Profil/
 │       ├── LokasiDitawarkan.php         # ingatan hasil pencarian lokasi (24 jam)
-│       └── RajaOngkir.php               # client pencarian lokasi
+│       └── RajaOngkir.php               # client RajaOngkir: pencarian lokasi + tarif
 └── Models/
     ├── Auth/
     │   └── User.php                     # model modul auth (27 model total sesuai skema SRS)
@@ -121,6 +126,8 @@ DB_PORT=5432
 DB_DATABASE=nichibag_db
 DB_USERNAME=postgres
 DB_PASSWORD=...
+RAJAONGKIR_API_KEY=...          # kosong membuat pencarian lokasi dan ongkir gagal
+RAJAONGKIR_BASE_URL=https://rajaongkir.komerce.id/api/v1
 ```
 
 Lalu:
@@ -130,6 +137,18 @@ php artisan migrate
 php artisan storage:link   # agar gambar produk di storage/app/public bisa diakses lewat /storage
 php artisan serve          # http://127.0.0.1:8000
 ```
+
+Urutan penyiapan data awal: akun Admin dibuat di luar aplikasi, alamat asal toko diisi
+lewat `PUT /admin/pengaturan-pengiriman`, lalu daftar layanan kurir diisi dari RajaOngkir:
+
+```bash
+php artisan rajaongkir:sinkron-layanan              # asal dari pengaturan pengiriman
+php artisan rajaongkir:sinkron-layanan --asal=4816  # atau pakai kode lokasi tertentu
+php artisan rajaongkir:sinkron-layanan --kurir=jne,pos  # batasi ke sebagian kurir
+```
+
+Perintah ini memakai kuota RajaOngkir (satu permintaan per kurir) dan butuh jaringan.
+Layanan yang didapat tersimpan sebagai **nonaktif**; Admin memilih mana yang ditawarkan.
 
 ## Pengujian
 
@@ -195,7 +214,7 @@ Semua route dipisah per modul di `routes/*.php` dan memakai session guard. Respo
 | POST | `/keranjang/item` | `keranjang.item.store` | `auth`, `active` | FR-CART-01 #1/#2 - tambah item: `variant_id`, `quantity`, `design_id` (custom). Varian sama digabung. `422` "Minimal pemesanan untuk varian ini adalah {moq} pcs" / "Stok tidak mencukupi" / "Produk tidak tersedia" / "Produk custom harus ditambahkan dari preview desain"; `404` "Desain tidak ditemukan" |
 | PATCH | `/keranjang/item/{id}` | `keranjang.item.update` | `auth`, `active` | FR-CART-01 #3 - ubah `quantity` saja; MOQ dan Stok Tersedia diperiksa ulang, `harga_satuan` tidak berubah. `404` "Item keranjang tidak ditemukan" untuk item User lain |
 | DELETE | `/keranjang/item/{id}` | `keranjang.item.destroy` | `auth`, `active` | FR-CART-01 #4 - hapus item; `404` "Item keranjang tidak ditemukan" untuk item User lain |
-| GET | `/admin/kurir` | `kurir.index` | `auth`, `active`, `role:admin_ecommerce` | FR-CKOT-04 #2/#3 - daftar **semua** layanan kurir (`kode`, `nama`, `layanan`, `is_aktif`), termasuk yang nonaktif. Tidak ada route tambah: barisnya disiapkan `CourierSeeder` |
+| GET | `/admin/kurir` | `kurir.index` | `auth`, `active`, `role:admin_ecommerce` | FR-CKOT-04 #2/#3 - daftar **semua** layanan kurir (`kode`, `nama`, `layanan`, `is_aktif`), termasuk yang nonaktif. Tidak ada route tambah: barisnya hasil `php artisan rajaongkir:sinkron-layanan` |
 | PUT | `/admin/kurir/{id}/aktif` | `kurir.aktif` | `auth`, `active`, `role:admin_ecommerce` | FR-CKOT-04 #2 - aktifkan layanan; `404` "Kurir tidak ditemukan" |
 | PUT | `/admin/kurir/{id}/nonaktif` | `kurir.nonaktif` | `auth`, `active`, `role:admin_ecommerce` | FR-CKOT-04 #3/#4 - nonaktifkan layanan; `422` "Minimal satu layanan kurir harus aktif" bila itu yang terakhir |
 | GET | `/admin/pengaturan-pengiriman` | `pengaturan-pengiriman.tampil` | `auth`, `active`, `role:admin_ecommerce` | FR-CKOT-04 #1 - alamat asal toko (`alamat_jalan`, `kode_lokasi`, `label_lokasi`), `data` null bila belum diisi |
@@ -275,7 +294,8 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Label MOQ memakai pesan FR-PROD-03 #2** (`"Minimal pemesanan untuk varian ini adalah {moq} pcs"`) karena dokumen tidak menyediakan label khusus MOQ di keranjang, sementara srs.md:516 tetap meminta MOQ divalidasi saat ringkasan dibuka. Keadaan ini muncul ketika Admin menaikkan MOQ setelah item masuk keranjang.
 - **Validasi harga (FR-CART-02)**: yang diperiksa adalah perhitungan ulang `subtotal = quantity x harga_satuan`, memakai harga yang sudah dikunci saat item masuk (FR-CART-01 #6), bukan harga katalog terbaru. Tidak ada peringatan "harga berubah" karena perubahan harga katalog memang tidak boleh mengubah isi keranjang.
 - **Endpoint checkout keranjang ditunda ke FR-CKOT-01** (keputusan): skenario #4 (mengarahkan ke halaman checkout) dan #5 (menolak pilihan dari dua bagian sekaligus) belum dapat diuji tanpa halaman checkout. Bentuk pilihan yang akan dipakai sudah ditetapkan: `item_ids[]` per item, dengan pilihan kosong dijawab `422` "Pilih minimal satu item untuk di-checkout" dan id milik User lain dijawab `404` "Item keranjang tidak ditemukan".
-- **Daftar kurir disiapkan seeder, bukan dibuat Admin (FR-CKOT-04 #2)**: Given skenario #2 berbunyi "daftar kurir dan layanan yang didukung **tampil**", sedangkan dokumen tidak punya satu pun skenario menambah, mengubah, atau menghapus data kurir — yang diatur hanya mengaktifkan dan menonaktifkan. Karena itu `CourierSeeder` menyiapkan pasangan kode+layanan (JNE, POS Indonesia, TIKI) dengan `is_aktif = false`; Admin memilih mana yang ditawarkan toko lewat endpoint aktif. Default nonaktif dipilih supaya toko tidak tanpa sengaja menawarkan layanan yang belum ada kerja samanya, dan `firstOrCreate` menjaga seeder aman dijalankan ulang tanpa menghidupkan kembali layanan yang sudah dimatikan Admin.
+- **Daftar kurir dan layanan berasal dari RajaOngkir, bukan daftar tulisan tangan (FR-CKOT-04 #2)**: `srs.md:228` dan `:289` menyatakan layanan kurir yang didukung datang dari API Kurir, dan `srs.md:809` melarang membangun komponen tarif sendiri. Karena RajaOngkir tidak punya endpoint "daftar layanan" — `service` seperti `REG`/`YES`/`OKE` hanya keluar dari `POST /calculate/domestic-cost` untuk satu rute tertentu — daftar diisi perintah `php artisan rajaongkir:sinkron-layanan`, bukan seeder. Yang tetap statis hanya **kode** kurir (17 kode dari dokumentasi RajaOngkir) karena itu memang kontrak, bukan hasil panggilan. Dokumen tetap tidak punya skenario menambah layanan dari aplikasi, jadi tidak ada route tambah; baris baru lahir `is_aktif = false` dan `is_aktif` baris lama tidak disentuh supaya sinkronisasi ulang tidak menghidupkan layanan yang sudah dimatikan Admin.
+- **Keterbatasan sinkronisasi layanan**: perintah memakai satu rute contoh (asal ke asal, berat 1000 g, tarif termurah), jadi layanan yang hanya tersedia di sebagian rute bisa tidak ikut tersimpan. Berat tidak mengubah daftar layanan, hanya tarifnya. Rute contoh dipilih sekali dan tidak disimpan sebagai aturan bisnis.
 - **Aktif dan nonaktif sebagai dua endpoint, bukan satu `PUT {is_aktif}`**: penolakan FR-CKOT-04 #4 hanya berlaku pada aksi mematikan layanan terakhir. Memisahkan URL membuat niat User terbaca dari route, bukan dari isi body yang bisa salah bentuk, dan pesan penolakan tidak pernah muncul saat Admin justru sedang mengaktifkan.
 - **Penjagaan "minimal satu layanan aktif" hidup di controller**: aturan ini menghitung baris **lain**, sedangkan `CHECK` constraint PostgreSQL tidak bisa melakukannya. Konsekuensi yang diterima: dua permintaan nonaktif yang benar-benar bersamaan masih bisa menurunkan jumlah layanan aktif menjadi nol — hutang yang sama dengan keunikan nama kategori (lihat butir di atas), dan tidak ditutup dengan `lockForUpdate` karena menambah kunci tabel untuk keadaan yang belum pernah terjadi.
 - **Alamat asal toko memakai `LokasiDitawarkan` yang sama dengan alamat User**: FR-CKOT-04 #1 secara eksplisit merujuk FR-PROF-01 #11/#12, jadi kode lokasi wajib berasal dari hasil `GET /lokasi` dan `label_lokasi` kiriman klien diabaikan. Tabelnya `shop_settings` dengan `CHECK (id = 1)`; karena `id` tidak ada di `$fillable`, baris pertama dibuat dengan `id = 1` ditulis eksplisit — `updateOrCreate(['id' => 1], ...)` akan membuang `id` saat insert dan gagal begitu urutan id sudah lewat dari 1.

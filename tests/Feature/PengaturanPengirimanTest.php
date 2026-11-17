@@ -6,7 +6,6 @@ use App\Models\Auth\User;
 use App\Models\Courier;
 use App\Models\ShopSetting;
 use App\Services\Profil\LokasiDitawarkan;
-use Database\Seeders\CourierSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -172,14 +171,6 @@ class PengaturanPengirimanTest extends TestCase
             ->assertJsonPath('data.kode_lokasi', '4817');
 
         $this->assertSame(1, ShopSetting::count());
-    }
-
-    public function test_seeder_menyiapkan_layanan_kurir_nonaktif(): void
-    {
-        $this->seed(CourierSeeder::class);
-
-        $this->assertGreaterThanOrEqual(3, Courier::count());
-        $this->assertSame(0, Courier::where('is_aktif', true)->count());
     }
 
     public function test_kurir_tidak_dikenal_dibalas_404(): void

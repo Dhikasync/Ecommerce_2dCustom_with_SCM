@@ -12,9 +12,6 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
-        // FR-CKOT-04 #2: layanan kurir disiapkan setup, bukan dibuat Admin.
-        $this->call(CourierSeeder::class);
-
         User::factory()->create([
             'name' => 'Test User',
             'email' => 'test@example.com',

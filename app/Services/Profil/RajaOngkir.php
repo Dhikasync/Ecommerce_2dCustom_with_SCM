@@ -44,13 +44,66 @@ class RajaOngkir
             throw new RajaOngkirException('RajaOngkir tidak dapat dihubungi', previous: $e);
         }
 
+        $data = $this->bacaData($response, 'Respons RajaOngkir tidak memuat data lokasi');
+
+        foreach ($data as $lokasi) {
+            if (! is_array($lokasi) || ! isset($lokasi['id'], $lokasi['label'])) {
+                throw new RajaOngkirException('Bentuk data lokasi tidak dikenali');
+            }
+        }
+
         return array_map(
             fn (array $lokasi) => [
                 'kode_lokasi' => (string) $lokasi['id'],
                 'label_lokasi' => (string) $lokasi['label'],
             ],
-            $this->bacaData($response),
+            $data,
         );
+    }
+
+    /**
+     * FR-CKOT-01 #3, UC-27. Tarif hanya bisa dihitung per rute, jadi daftar
+     * `service` yang dikembalikan API adalah satu-satunya sumber layanan.
+     *
+     * @return list<array{kode_kurir: string, nama_kurir: string, layanan: string, deskripsi: string, biaya: int, etd: string}>
+     *
+     * @throws RajaOngkirException
+     */
+    public function hitungOngkir(string $asal, string $tujuan, int $beratGram, string $kurir): array
+    {
+        $peminta = $this->peminta();
+
+        try {
+            $response = $peminta->asForm()->post('/calculate/domestic-cost', [
+                'origin' => $asal,
+                'destination' => $tujuan,
+                'weight' => $beratGram,
+                'courier' => $kurir,
+                'filter' => 'lowest',
+            ]);
+        } catch (ConnectionException $e) {
+            throw new RajaOngkirException('RajaOngkir tidak dapat dihubungi', previous: $e);
+        }
+
+        $data = $this->bacaData($response, 'Respons RajaOngkir tidak memuat data tarif');
+        $hasil = [];
+
+        foreach ($data as $baris) {
+            if (! is_array($baris) || ! isset($baris['code'], $baris['service'], $baris['cost'])) {
+                throw new RajaOngkirException('Bentuk data tarif tidak dikenali');
+            }
+
+            $hasil[] = [
+                'kode_kurir' => (string) $baris['code'],
+                'nama_kurir' => (string) ($baris['name'] ?? $baris['code']),
+                'layanan' => (string) $baris['service'],
+                'deskripsi' => (string) ($baris['description'] ?? ''),
+                'biaya' => (int) $baris['cost'],
+                'etd' => (string) ($baris['etd'] ?? ''),
+            ];
+        }
+
+        return $hasil;
     }
 
     private function peminta(): PendingRequest
@@ -74,7 +127,7 @@ class RajaOngkir
     /**
      * @return list<array<string, mixed>>
      */
-    private function bacaData(Response $response): array
+    private function bacaData(Response $response, string $pesanKosong): array
     {
         if (! $response->successful()) {
             throw new RajaOngkirException('RajaOngkir membalas status '.$response->status());
@@ -90,13 +143,7 @@ class RajaOngkir
         $data = $response->json('data');
 
         if (! is_array($data)) {
-            throw new RajaOngkirException('Respons RajaOngkir tidak memuat data lokasi');
-        }
-
-        foreach ($data as $lokasi) {
-            if (! is_array($lokasi) || ! isset($lokasi['id'], $lokasi['label'])) {
-                throw new RajaOngkirException('Bentuk data lokasi tidak dikenali');
-            }
+            throw new RajaOngkirException($pesanKosong);
         }
 
         return $data;
