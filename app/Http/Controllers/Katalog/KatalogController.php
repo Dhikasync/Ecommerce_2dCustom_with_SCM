@@ -6,11 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Produk\Category;
 use App\Models\Produk\Product;
 use App\Models\Produk\Variant;
+use App\Support\GambarPublik;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * FR-KTLG-01, UC-12: etalase publik, hanya produk aktif, harga dari varian
@@ -28,8 +27,6 @@ class KatalogController extends Controller
 
     private const PER_HALAMAN_MAKSIMAL = 50;
 
-    private const DISK = 'public';
-
     public function daftar(Request $request): JsonResponse
     {
         $kataKunci = $request->query('q');
@@ -39,6 +36,7 @@ class KatalogController extends Controller
             ->where('is_aktif', true)
             ->withCount('reviews')
             ->withAvg('reviews', 'rating')
+            // Alias `variants_min_*` dibaca `kartu()`; jangan dihapus tanpa mengubah sana.
             ->withMin('variants', 'harga')
             ->withMin('variants', 'moq')
             // Produk tanpa varian berarti tidak bisa dibeli, jadi `habis`.
@@ -190,7 +188,7 @@ class KatalogController extends Controller
         return [
             'id' => $produk->id,
             'nama' => $produk->nama,
-            'gambar_url' => $this->urlGambar($produk->gambar),
+            'gambar_url' => GambarPublik::url($produk->gambar),
             'tipe' => $produk->tipe,
             'is_custom' => $produk->isCustom(),
             'harga_mulai' => $produk->variants_min_harga ?? $produk->harga_dasar,
@@ -232,7 +230,7 @@ class KatalogController extends Controller
      */
     private function galeri(Product $produk): array
     {
-        return array_map(fn (string $path) => $this->urlGambar($path), $produk->berkasGambar());
+        return array_map(fn (string $path) => GambarPublik::url($path), $produk->berkasGambar());
     }
 
     /**
@@ -252,19 +250,5 @@ class KatalogController extends Controller
             // Stok Tersedia = Fisik - Direservasi, accessor di model (FR-SCM-01).
             'stok_tersedia' => $varian->stok_tersedia,
         ];
-    }
-
-    private function urlGambar(?string $path): ?string
-    {
-        if ($path === null) {
-            return null;
-        }
-
-        // `url()` ada di kontrak Cloud/FilesystemAdapter, bukan di kontrak
-        // Filesystem yang dijanjikan facade Storage.
-        /** @var FilesystemAdapter $disk */
-        $disk = Storage::disk(self::DISK);
-
-        return $disk->url($path);
     }
 }

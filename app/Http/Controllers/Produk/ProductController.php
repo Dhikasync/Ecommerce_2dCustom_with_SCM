@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Produk;
 use App\Http\Controllers\Controller;
 use App\Models\OrderItem;
 use App\Models\Produk\Product;
-use Illuminate\Filesystem\FilesystemAdapter;
+use App\Support\GambarPublik;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -240,20 +240,6 @@ class ProductController extends Controller
         }
     }
 
-    private function urlGambar(?string $path): ?string
-    {
-        if ($path === null) {
-            return null;
-        }
-
-        // `url()` ada di kontrak Cloud/FilesystemAdapter, bukan di kontrak
-        // Filesystem yang dijanjikan facade Storage.
-        /** @var FilesystemAdapter $disk */
-        $disk = Storage::disk(self::DISK);
-
-        return $disk->url($path);
-    }
-
     /**
      * @return array<string, mixed>
      */
@@ -278,7 +264,7 @@ class ProductController extends Controller
                 'nama' => $produk->category?->nama,
             ],
             'gambar' => $produk->gambar,
-            'gambar_url' => $this->urlGambar($produk->gambar),
+            'gambar_url' => GambarPublik::url($produk->gambar),
             'jumlah_varian' => $produk->variants_count
                 ?? ($produk->relationLoaded('variants') ? $produk->variants->count() : null),
         ];
@@ -288,7 +274,7 @@ class ProductController extends Controller
                 ->map(fn ($gambar) => [
                     'id' => $gambar->id,
                     'urutan' => $gambar->urutan,
-                    'url' => $this->urlGambar($gambar->gambar),
+                    'url' => GambarPublik::url($gambar->gambar),
                 ])
                 ->values()
                 ->all();
