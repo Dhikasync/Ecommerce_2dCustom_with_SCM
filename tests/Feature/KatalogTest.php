@@ -12,8 +12,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * FR-KTLG-01, UC-12. Kartu katalog: foto, nama, badge Custom, harga mulai dari
- * varian termurah, MOQ, status stok, rating. Paginasi dan pesan kosong ikut diuji.
+ * FR-KTLG-01, UC-12: kartu katalog (foto, nama, badge Custom, harga mulai, MOQ,
+ * status stok, rating, paginasi). FR-KTLG-02, UC-13: detail produk (galeri,
+ * deskripsi, varian + Stok Tersedia, 404). FR-KTLG-03, UC-14: filter, cari, urut.
  */
 class KatalogTest extends TestCase
 {
@@ -216,6 +217,386 @@ class KatalogTest extends TestCase
         $this->actingAs(User::factory()->create())
             ->getJson('/katalog')
             ->assertOk();
+    }
+
+    /** Skenario #1: nama, deskripsi, kategori, harga, varian. */
+    public function test_detail_menampilkan_data_produk(): void
+    {
+        $produk = $this->produk([
+            'nama' => 'Tote Bag Kanvas',
+            'deskripsi' => 'Tas kanvas tebal',
+            'harga_dasar' => 50000,
+        ]);
+
+        $this->varian($produk, ['sku' => 'TOTE-M', 'harga' => 20000]);
+        $this->varian($produk, ['sku' => 'TOTE-S', 'harga' => 15000]);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $produk->id)
+            ->assertJsonPath('data.nama', 'Tote Bag Kanvas')
+            ->assertJsonPath('data.deskripsi', 'Tas kanvas tebal')
+            ->assertJsonPath('data.tipe', 'jadi')
+            ->assertJsonPath('data.is_custom', false)
+            ->assertJsonPath('data.kategori.nama', 'Tas')
+            ->assertJsonPath('data.harga_mulai', 15000)
+            ->assertJsonCount(2, 'data.varian')
+            // Urutan varian harus tetap, bukan urutan acak dari database.
+            ->assertJsonPath('data.varian.0.sku', 'TOTE-M')
+            ->assertJsonPath('data.varian.1.sku', 'TOTE-S');
+    }
+
+    /** Skenario #1: foto utama jadi item pertama, lalu galeri urut kolom `urutan`. */
+    public function test_galeri_memuat_foto_utama_lebih_dulu_lalu_urut(): void
+    {
+        $produk = $this->produk(['gambar' => 'produk/utama.jpg']);
+
+        $produk->images()->create(['gambar' => 'produk/kedua.jpg', 'urutan' => 2]);
+        $produk->images()->create(['gambar' => 'produk/ketiga.jpg', 'urutan' => 1]);
+
+        $galeri = $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonCount(3, 'data.galeri')
+            ->json('data.galeri');
+
+        $this->assertStringEndsWith('/storage/produk/utama.jpg', $galeri[0]);
+        $this->assertStringEndsWith('/storage/produk/ketiga.jpg', $galeri[1]);
+        $this->assertStringEndsWith('/storage/produk/kedua.jpg', $galeri[2]);
+    }
+
+    public function test_galeri_berisi_satu_foto_bila_belum_ada_galeri(): void
+    {
+        $produk = $this->produk(['gambar' => 'produk/utama.jpg']);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data.galeri');
+    }
+
+    public function test_galeri_kosong_bila_produk_belum_punya_foto(): void
+    {
+        $produk = $this->produk();
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonPath('data.galeri', []);
+    }
+
+    /** Foto utama yang juga tercatat di `product_images` tidak boleh muncul dua kali. */
+    public function test_foto_utama_yang_juga_ada_di_galeri_hanya_muncul_sekali(): void
+    {
+        $produk = $this->produk(['gambar' => 'produk/utama.jpg']);
+
+        $produk->images()->create(['gambar' => 'produk/utama.jpg', 'urutan' => 1]);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data.galeri');
+    }
+
+    public function test_detail_tanpa_varian_memakai_harga_dasar(): void
+    {
+        $produk = $this->produk(['harga_dasar' => 40000]);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonPath('data.harga_mulai', 40000)
+            ->assertJsonPath('data.varian', []);
+    }
+
+    /** SRS 4.4.2: varian membawa harga, berat, MOQ, dan Stok Tersedia. */
+    public function test_varian_menampilkan_harga_berat_moq_dan_stok_tersedia(): void
+    {
+        $produk = $this->produk();
+
+        $this->varian($produk, [
+            'sku' => 'TOTE-M-HTM',
+            'ukuran' => 'M',
+            'warna' => 'Hitam',
+            'ketebalan' => '12 oz',
+            'harga' => 25000,
+            'berat' => 300,
+            'moq' => 4,
+            'stok_fisik' => 10,
+            'stok_direservasi' => 3,
+        ]);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonPath('data.varian.0.sku', 'TOTE-M-HTM')
+            ->assertJsonPath('data.varian.0.ukuran', 'M')
+            ->assertJsonPath('data.varian.0.warna', 'Hitam')
+            ->assertJsonPath('data.varian.0.ketebalan', '12 oz')
+            ->assertJsonPath('data.varian.0.harga', 25000)
+            ->assertJsonPath('data.varian.0.berat', 300)
+            ->assertJsonPath('data.varian.0.moq', 4)
+            ->assertJsonPath('data.varian.0.stok_tersedia', 7);
+    }
+
+    /** Skenario #3: Stok Tersedia 0 adalah dasar label "Stok Habis". */
+    public function test_varian_stok_habis_menampilkan_stok_tersedia_nol(): void
+    {
+        $produk = $this->produk();
+
+        $this->varian($produk, ['sku' => 'HABIS', 'stok_fisik' => 2, 'stok_direservasi' => 2]);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonPath('data.varian.0.stok_tersedia', 0);
+    }
+
+    /** Skenario #4: penanda tombol "Kustomisasi Desain" pengganti keranjang. */
+    public function test_produk_custom_ditandai_untuk_tombol_kustomisasi(): void
+    {
+        $produk = $this->produk([
+            'tipe' => 'custom',
+            'is_aktif' => true,
+            'sla_hari' => 3,
+        ]);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonPath('data.tipe', 'custom')
+            ->assertJsonPath('data.is_custom', true);
+    }
+
+    /** Skenario #5: pesan persis dokumen. */
+    public function test_produk_tidak_ada_menjawab_404_dengan_pesan_dokumen(): void
+    {
+        $this->getJson('/katalog/999999')
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Produk tidak ditemukan');
+    }
+
+    public function test_produk_nonaktif_dianggap_tidak_ditemukan(): void
+    {
+        $produk = $this->produk(['is_aktif' => false]);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Produk tidak ditemukan');
+    }
+
+    /** Id non-angka harus 404, bukan error query PostgreSQL. */
+    public function test_id_bukan_angka_menjawab_pesan_tidak_ditemukan(): void
+    {
+        $this->getJson('/katalog/bukan-angka')
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Produk tidak ditemukan');
+    }
+
+    public function test_guest_dan_user_bisa_membuka_detail_produk(): void
+    {
+        $produk = $this->produk();
+
+        $this->getJson("/katalog/{$produk->id}")->assertOk();
+
+        $this->actingAs(User::factory()->create())
+            ->getJson("/katalog/{$produk->id}")
+            ->assertOk();
+    }
+
+    /** FR-KTLG-03 skenario #1: hanya produk kategori yang dipilih. */
+    public function test_filter_kategori_hanya_menampilkan_produk_kategori_itu(): void
+    {
+        $tas = Category::firstOrCreate(['nama' => 'Tas'])->id;
+        $paperBag = Category::firstOrCreate(['nama' => 'Paper Bag'])->id;
+
+        $this->produk(['nama' => 'Tote Bag', 'category_id' => $tas]);
+        $this->produk(['nama' => 'Paper Bag Kecil', 'category_id' => $paperBag]);
+
+        $this->getJson('/katalog?kategori_id='.$paperBag)
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.nama', 'Paper Bag Kecil');
+    }
+
+    /** FR-KTLG-03 skenario #2: filter jenis produk, dua arah. */
+    public function test_filter_jenis_hanya_menampilkan_produk_jenis_itu(): void
+    {
+        $this->produk(['nama' => 'Tote Jadi']);
+        $this->produk(['nama' => 'Tote Custom', 'tipe' => 'custom', 'sla_hari' => 3]);
+
+        $this->getJson('/katalog?jenis=custom')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.nama', 'Tote Custom');
+
+        $this->getJson('/katalog?jenis=jadi')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.nama', 'Tote Jadi');
+    }
+
+    /** FR-KTLG-03 skenario #3: kategori dan jenis harus terpenuhi keduanya. */
+    public function test_kombinasi_kategori_dan_jenis(): void
+    {
+        $tas = Category::firstOrCreate(['nama' => 'Tas'])->id;
+        $paperBag = Category::firstOrCreate(['nama' => 'Paper Bag'])->id;
+
+        $this->produk(['nama' => 'Paper Bag Jadi', 'category_id' => $paperBag]);
+        $this->produk([
+            'nama' => 'Paper Bag Custom',
+            'category_id' => $paperBag,
+            'tipe' => 'custom',
+            'sla_hari' => 3,
+        ]);
+        $this->produk([
+            'nama' => 'Tote Custom',
+            'category_id' => $tas,
+            'tipe' => 'custom',
+            'sla_hari' => 3,
+        ]);
+
+        $this->getJson('/katalog?kategori_id='.$paperBag.'&jenis=custom')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.nama', 'Paper Bag Custom');
+    }
+
+    /** FR-KTLG-03 skenario #4: pesan persis dokumen. */
+    public function test_filter_tanpa_hasil_mengirim_pesan_filter(): void
+    {
+        $this->produk();
+
+        $this->getJson('/katalog?jenis=custom')
+            ->assertOk()
+            ->assertJsonPath('message', 'Tidak ada produk yang sesuai dengan filter ini')
+            ->assertJsonPath('data', [])
+            ->assertJsonPath('meta.total', 0);
+    }
+
+    /** FR-KTLG-03 skenario #5: tanpa parameter filter, seluruh produk kembali. */
+    public function test_reset_filter_mengembalikan_seluruh_produk(): void
+    {
+        $this->produk(['nama' => 'Tote Jadi']);
+        $this->produk(['nama' => 'Tote Custom', 'tipe' => 'custom', 'sla_hari' => 3]);
+
+        $this->getJson('/katalog?jenis=custom')->assertOk()->assertJsonPath('meta.total', 1);
+
+        $this->getJson('/katalog')->assertOk()->assertJsonPath('meta.total', 2);
+    }
+
+    /** Skenario #7: kata kunci dicocokkan ke nama, tanpa beda huruf besar-kecil. */
+    public function test_pencarian_mencocokkan_nama_tanpa_beda_huruf(): void
+    {
+        $this->produk(['nama' => 'Paper Bag Kanvas']);
+        $this->produk(['nama' => 'Tote Bag']);
+
+        $this->getJson('/katalog?q=PAPER')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.nama', 'Paper Bag Kanvas');
+
+        $this->getJson('/katalog?q=bag')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 2);
+    }
+
+    /** Skenario #8: pesan persis dokumen. */
+    public function test_pencarian_tanpa_hasil_mengirim_produk_tidak_ditemukan(): void
+    {
+        $this->produk(['nama' => 'Tote Bag']);
+
+        $this->getJson('/katalog?q=tidak-ada')
+            ->assertOk()
+            ->assertJsonPath('message', 'Produk tidak ditemukan')
+            ->assertJsonPath('data', [])
+            ->assertJsonPath('meta.total', 0);
+    }
+
+    /** Keputusan README: pencarian menang atas filter saat hasilnya kosong. */
+    public function test_pencarian_menang_atas_filter_saat_hasil_kosong(): void
+    {
+        $this->produk(['nama' => 'Tote Bag']);
+
+        $this->getJson('/katalog?q=tidak-ada&jenis=jadi')
+            ->assertOk()
+            ->assertJsonPath('message', 'Produk tidak ditemukan');
+    }
+
+    /** Kotak pencarian yang hanya berisi spasi bukan pencarian. */
+    public function test_kata_kunci_kosong_diabaikan(): void
+    {
+        $this->produk(['nama' => 'Tote Bag']);
+
+        $respons = $this->getJson('/katalog?q=%20%20')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+
+        $this->assertArrayNotHasKey('message', $respons->json());
+    }
+
+    /** `%` dan `_` adalah wildcard LIKE; keduanya harus dicari sebagai teks biasa. */
+    public function test_karakter_wildcard_dicari_sebagai_teks(): void
+    {
+        $this->produk(['nama' => 'Diskon 100%']);
+        $this->produk(['nama' => 'Produk 1000']);
+
+        $this->getJson('/katalog?q=100%25')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.nama', 'Diskon 100%');
+    }
+
+    /** Keputusan README: nilai filter tidak sah berarti tidak ada yang cocok. */
+    public function test_filter_tidak_sah_mengirim_pesan_filter(): void
+    {
+        $this->produk();
+
+        foreach (['jenis=apa-saja', 'kategori_id=999', 'kategori_id=abc'] as $filter) {
+            $this->getJson('/katalog?'.$filter)
+                ->assertOk()
+                ->assertJsonPath('message', 'Tidak ada produk yang sesuai dengan filter ini')
+                ->assertJsonPath('meta.total', 0);
+        }
+    }
+
+    /** Skenario #6: terendah ke tertinggi memakai harga mulai, termasuk harga_dasar. */
+    public function test_urut_harga_terendah_ke_tertinggi(): void
+    {
+        $tengah = $this->produk(['nama' => 'B Tote']);
+        $this->varian($tengah, ['sku' => 'B-1', 'harga' => 20000]);
+
+        // Tanpa varian: kartu menampilkan harga_dasar, jadi urutannya pun memakai itu.
+        $this->produk(['nama' => 'C Tanpa Varian', 'harga_dasar' => 10000]);
+
+        $mahal = $this->produk(['nama' => 'A Tote']);
+        $this->varian($mahal, ['sku' => 'A-1', 'harga' => 30000]);
+
+        $this->getJson('/katalog?urut=harga_asc')
+            ->assertOk()
+            ->assertJsonPath('data.0.nama', 'C Tanpa Varian')
+            ->assertJsonPath('data.1.nama', 'B Tote')
+            ->assertJsonPath('data.2.nama', 'A Tote');
+    }
+
+    public function test_urut_harga_memakai_varian_termurah_bukan_yang_pertama(): void
+    {
+        $dua = $this->produk(['nama' => 'Punya Dua Varian']);
+        $this->varian($dua, ['sku' => 'X-1', 'harga' => 90000]);
+        $this->varian($dua, ['sku' => 'X-2', 'harga' => 5000]);
+
+        $lain = $this->produk(['nama' => 'Lain']);
+        $this->varian($lain, ['sku' => 'Y-1', 'harga' => 40000]);
+
+        $this->getJson('/katalog?urut=harga_asc')
+            ->assertOk()
+            ->assertJsonPath('data.0.nama', 'Punya Dua Varian')
+            ->assertJsonPath('data.1.nama', 'Lain');
+    }
+
+    /** Keputusan README: daftar kategori untuk pilihan filter, publik dan urut nama. */
+    public function test_daftar_kategori_publik_urut_nama(): void
+    {
+        Category::firstOrCreate(['nama' => 'Tas']);
+        Category::firstOrCreate(['nama' => 'Paper Bag']);
+
+        $this->getJson('/kategori')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.nama', 'Paper Bag')
+            ->assertJsonPath('data.1.nama', 'Tas');
     }
 
     /**

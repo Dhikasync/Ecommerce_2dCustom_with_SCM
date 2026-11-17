@@ -122,7 +122,7 @@ class ProductController extends Controller
             return response()->json(['message' => self::PESAN_PESANAN_AKTIF], 422);
         }
 
-        $berkas = $this->daftarBerkas($produk);
+        $berkas = $produk->berkasGambar();
 
         $produk->delete();
 
@@ -238,19 +238,6 @@ class ProductController extends Controller
         if ($utamaLama !== null && $utamaLama !== $utamaBaru) {
             Storage::disk(self::DISK)->delete($utamaLama);
         }
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function daftarBerkas(Product $produk): array
-    {
-        return collect([$produk->gambar])
-            ->merge($produk->images->pluck('gambar'))
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
     }
 
     private function urlGambar(?string $path): ?string

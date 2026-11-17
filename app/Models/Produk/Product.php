@@ -47,6 +47,22 @@ class Product extends Model
         return $this->hasMany(ProductImage::class)->orderBy('urutan');
     }
 
+    /**
+     * Satu aturan untuk kartu, galeri, dan hapus berkas: foto utama dulu, lalu
+     * `product_images` urut `urutan`, tanpa berkas ganda.
+     *
+     * @return list<string>
+     */
+    public function berkasGambar(): array
+    {
+        return collect([$this->gambar])
+            ->merge($this->images->pluck('gambar'))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     public function reviews()
     {
         return $this->hasMany(Review::class);
