@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Modul 4.4 Katalog Produk (KTLG), srs.md:426: FR-KTLG-01 daftar produk.
+ * Modul 4.4 Katalog Produk (KTLG), srs.md:426: FR-KTLG-01 daftar, FR-KTLG-02 detail.
  * Publik: srs.md:430 menyatakan katalog tidak memerlukan login.
  */
 
@@ -10,3 +10,6 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/katalog', [KatalogController::class, 'daftar'])
     ->name('katalog.index');
+
+Route::get('/katalog/{id}', [KatalogController::class, 'detail'])
+    ->name('katalog.show');

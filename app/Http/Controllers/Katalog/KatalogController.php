@@ -4,18 +4,21 @@ namespace App\Http\Controllers\Katalog;
 
 use App\Http\Controllers\Controller;
 use App\Models\Produk\Product;
+use App\Models\Produk\Variant;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * FR-KTLG-01, UC-12. Etalase publik: hanya produk aktif, harga dari varian
- * termurah, status stok dihitung dari Tersedia (Fisik - Direservasi).
+ * FR-KTLG-01, UC-12: etalase publik, hanya produk aktif, harga dari varian
+ * termurah. FR-KTLG-02, UC-13: detail produk dengan varian dan Stok Tersedia.
  */
 class KatalogController extends Controller
 {
     private const PESAN_KOSONG = 'Belum ada produk tersedia';
+
+    private const PESAN_TIDAK_DITEMUKAN = 'Produk tidak ditemukan';
 
     private const PER_HALAMAN_BAWAAN = 12;
 
@@ -53,6 +56,27 @@ class KatalogController extends Controller
         );
     }
 
+    /**
+     * FR-KTLG-02 #1/#5, UC-13. Produk nonaktif dan id non-angka dijawab 404
+     * dengan pesan yang sama, supaya link lama tidak membuka etalase.
+     */
+    public function detail(Request $request): JsonResponse
+    {
+        // Id non-angka tidak boleh sampai ke query PostgreSQL (error tipe).
+        $id = filter_var($request->route('id'), FILTER_VALIDATE_INT);
+
+        $produk = $id === false ? null : Product::query()
+            ->where('is_aktif', true)
+            ->with(['category', 'images', 'variants' => fn ($query) => $query->orderBy('id')])
+            ->find($id);
+
+        if ($produk === null) {
+            return response()->json(['message' => self::PESAN_TIDAK_DITEMUKAN], 404);
+        }
+
+        return response()->json(['data' => $this->detailProduk($produk)]);
+    }
+
     private function perHalaman(Request $request): int
     {
         $nilai = filter_var($request->query('per_page'), FILTER_VALIDATE_INT);
@@ -82,6 +106,64 @@ class KatalogController extends Controller
                 ? null
                 : (float) $produk->reviews_avg_rating,
             'jumlah_ulasan' => $produk->reviews_count,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function detailProduk(Product $produk): array
+    {
+        return [
+            'id' => $produk->id,
+            'nama' => $produk->nama,
+            'deskripsi' => $produk->deskripsi,
+            'tipe' => $produk->tipe,
+            'is_custom' => $produk->isCustom(),
+            'kategori' => [
+                'id' => $produk->category?->id,
+                'nama' => $produk->category?->nama,
+            ],
+            'harga_mulai' => $produk->variants->min('harga') ?? $produk->harga_dasar,
+            'galeri' => $this->galeri($produk),
+            'varian' => $produk->variants
+                ->map(fn (Variant $varian) => $this->varian($varian))
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /**
+     * Foto utama lebih dulu, lalu galeri urut kolom `urutan` (FR-KTLG-02 #1).
+     *
+     * @return array<int, string|null>
+     */
+    private function galeri(Product $produk): array
+    {
+        return collect([$produk->gambar])
+            ->merge($produk->images->pluck('gambar'))
+            ->filter()
+            ->map(fn (string $path) => $this->urlGambar($path))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function varian(Variant $varian): array
+    {
+        return [
+            'id' => $varian->id,
+            'sku' => $varian->sku,
+            'ukuran' => $varian->ukuran,
+            'warna' => $varian->warna,
+            'ketebalan' => $varian->ketebalan,
+            'harga' => $varian->harga,
+            'berat' => $varian->berat,
+            'moq' => $varian->moq,
+            // Stok Tersedia = Fisik - Direservasi, accessor di model (FR-SCM-01).
+            'stok_tersedia' => $varian->stok_tersedia,
         ];
     }
 

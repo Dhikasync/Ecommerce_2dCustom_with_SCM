@@ -12,8 +12,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * FR-KTLG-01, UC-12. Kartu katalog: foto, nama, badge Custom, harga mulai dari
- * varian termurah, MOQ, status stok, rating. Paginasi dan pesan kosong ikut diuji.
+ * FR-KTLG-01, UC-12: kartu katalog (foto, nama, badge Custom, harga mulai, MOQ,
+ * status stok, rating, paginasi). FR-KTLG-02, UC-13: detail produk (galeri,
+ * deskripsi, varian + Stok Tersedia, 404).
  */
 class KatalogTest extends TestCase
 {
@@ -215,6 +216,171 @@ class KatalogTest extends TestCase
 
         $this->actingAs(User::factory()->create())
             ->getJson('/katalog')
+            ->assertOk();
+    }
+
+    /** Skenario #1: nama, deskripsi, kategori, harga, varian. */
+    public function test_detail_menampilkan_data_produk(): void
+    {
+        $produk = $this->produk([
+            'nama' => 'Tote Bag Kanvas',
+            'deskripsi' => 'Tas kanvas tebal',
+            'harga_dasar' => 50000,
+        ]);
+
+        $this->varian($produk, ['sku' => 'TOTE-M', 'harga' => 20000]);
+        $this->varian($produk, ['sku' => 'TOTE-S', 'harga' => 15000]);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $produk->id)
+            ->assertJsonPath('data.nama', 'Tote Bag Kanvas')
+            ->assertJsonPath('data.deskripsi', 'Tas kanvas tebal')
+            ->assertJsonPath('data.tipe', 'jadi')
+            ->assertJsonPath('data.is_custom', false)
+            ->assertJsonPath('data.kategori.nama', 'Tas')
+            ->assertJsonPath('data.harga_mulai', 15000)
+            ->assertJsonCount(2, 'data.varian')
+            // Urutan varian harus tetap, bukan urutan acak dari database.
+            ->assertJsonPath('data.varian.0.sku', 'TOTE-M')
+            ->assertJsonPath('data.varian.1.sku', 'TOTE-S');
+    }
+
+    /** Skenario #1: foto utama jadi item pertama, lalu galeri urut kolom `urutan`. */
+    public function test_galeri_memuat_foto_utama_lebih_dulu_lalu_urut(): void
+    {
+        $produk = $this->produk(['gambar' => 'produk/utama.jpg']);
+
+        $produk->images()->create(['gambar' => 'produk/kedua.jpg', 'urutan' => 2]);
+        $produk->images()->create(['gambar' => 'produk/ketiga.jpg', 'urutan' => 1]);
+
+        $galeri = $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonCount(3, 'data.galeri')
+            ->json('data.galeri');
+
+        $this->assertStringEndsWith('/storage/produk/utama.jpg', $galeri[0]);
+        $this->assertStringEndsWith('/storage/produk/ketiga.jpg', $galeri[1]);
+        $this->assertStringEndsWith('/storage/produk/kedua.jpg', $galeri[2]);
+    }
+
+    public function test_galeri_berisi_satu_foto_bila_belum_ada_galeri(): void
+    {
+        $produk = $this->produk(['gambar' => 'produk/utama.jpg']);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data.galeri');
+    }
+
+    public function test_galeri_kosong_bila_produk_belum_punya_foto(): void
+    {
+        $produk = $this->produk();
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonPath('data.galeri', []);
+    }
+
+    public function test_detail_tanpa_varian_memakai_harga_dasar(): void
+    {
+        $produk = $this->produk(['harga_dasar' => 40000]);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonPath('data.harga_mulai', 40000)
+            ->assertJsonPath('data.varian', []);
+    }
+
+    /** SRS 4.4.2: varian membawa harga, berat, MOQ, dan Stok Tersedia. */
+    public function test_varian_menampilkan_harga_berat_moq_dan_stok_tersedia(): void
+    {
+        $produk = $this->produk();
+
+        $this->varian($produk, [
+            'sku' => 'TOTE-M-HTM',
+            'ukuran' => 'M',
+            'warna' => 'Hitam',
+            'ketebalan' => '12 oz',
+            'harga' => 25000,
+            'berat' => 300,
+            'moq' => 4,
+            'stok_fisik' => 10,
+            'stok_direservasi' => 3,
+        ]);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonPath('data.varian.0.sku', 'TOTE-M-HTM')
+            ->assertJsonPath('data.varian.0.ukuran', 'M')
+            ->assertJsonPath('data.varian.0.warna', 'Hitam')
+            ->assertJsonPath('data.varian.0.ketebalan', '12 oz')
+            ->assertJsonPath('data.varian.0.harga', 25000)
+            ->assertJsonPath('data.varian.0.berat', 300)
+            ->assertJsonPath('data.varian.0.moq', 4)
+            ->assertJsonPath('data.varian.0.stok_tersedia', 7);
+    }
+
+    /** Skenario #3: Stok Tersedia 0 adalah dasar label "Stok Habis". */
+    public function test_varian_stok_habis_menampilkan_stok_tersedia_nol(): void
+    {
+        $produk = $this->produk();
+
+        $this->varian($produk, ['sku' => 'HABIS', 'stok_fisik' => 2, 'stok_direservasi' => 2]);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonPath('data.varian.0.stok_tersedia', 0);
+    }
+
+    /** Skenario #4: penanda tombol "Kustomisasi Desain" pengganti keranjang. */
+    public function test_produk_custom_ditandai_untuk_tombol_kustomisasi(): void
+    {
+        $produk = $this->produk([
+            'tipe' => 'custom',
+            'is_aktif' => true,
+            'sla_hari' => 3,
+        ]);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonPath('data.tipe', 'custom')
+            ->assertJsonPath('data.is_custom', true);
+    }
+
+    /** Skenario #5: pesan persis dokumen. */
+    public function test_produk_tidak_ada_menjawab_404_dengan_pesan_dokumen(): void
+    {
+        $this->getJson('/katalog/999999')
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Produk tidak ditemukan');
+    }
+
+    public function test_produk_nonaktif_dianggap_tidak_ditemukan(): void
+    {
+        $produk = $this->produk(['is_aktif' => false]);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Produk tidak ditemukan');
+    }
+
+    /** Id non-angka harus 404, bukan error query PostgreSQL. */
+    public function test_id_bukan_angka_menjawab_pesan_tidak_ditemukan(): void
+    {
+        $this->getJson('/katalog/bukan-angka')
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Produk tidak ditemukan');
+    }
+
+    public function test_guest_dan_user_bisa_membuka_detail_produk(): void
+    {
+        $produk = $this->produk();
+
+        $this->getJson("/katalog/{$produk->id}")->assertOk();
+
+        $this->actingAs(User::factory()->create())
+            ->getJson("/katalog/{$produk->id}")
             ->assertOk();
     }
 
