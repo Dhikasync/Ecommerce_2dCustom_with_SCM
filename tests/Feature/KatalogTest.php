@@ -282,6 +282,18 @@ class KatalogTest extends TestCase
             ->assertJsonPath('data.galeri', []);
     }
 
+    /** Foto utama yang juga tercatat di `product_images` tidak boleh muncul dua kali. */
+    public function test_foto_utama_yang_juga_ada_di_galeri_hanya_muncul_sekali(): void
+    {
+        $produk = $this->produk(['gambar' => 'produk/utama.jpg']);
+
+        $produk->images()->create(['gambar' => 'produk/utama.jpg', 'urutan' => 1]);
+
+        $this->getJson("/katalog/{$produk->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data.galeri');
+    }
+
     public function test_detail_tanpa_varian_memakai_harga_dasar(): void
     {
         $produk = $this->produk(['harga_dasar' => 40000]);

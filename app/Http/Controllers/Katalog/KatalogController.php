@@ -134,18 +134,11 @@ class KatalogController extends Controller
     }
 
     /**
-     * Foto utama lebih dulu, lalu galeri urut kolom `urutan` (FR-KTLG-02 #1).
-     *
-     * @return array<int, string|null>
+     * @return array<int, string>
      */
     private function galeri(Product $produk): array
     {
-        return collect([$produk->gambar])
-            ->merge($produk->images->pluck('gambar'))
-            ->filter()
-            ->map(fn (string $path) => $this->urlGambar($path))
-            ->values()
-            ->all();
+        return array_map(fn (string $path) => $this->urlGambar($path), $produk->berkasGambar());
     }
 
     /**
