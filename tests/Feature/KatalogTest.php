@@ -114,6 +114,16 @@ class KatalogTest extends TestCase
         $this->getJson('/katalog')->assertJsonPath('data.0.moq', null);
     }
 
+    /** Produk tanpa foto tetap tampil; `gambar_url` null, bukan string kosong. */
+    public function test_kartu_tanpa_foto_mengirim_gambar_url_null(): void
+    {
+        $this->produk(['gambar' => null]);
+
+        $this->getJson('/katalog')
+            ->assertOk()
+            ->assertJsonPath('data.0.gambar_url', null);
+    }
+
     public function test_moq_kartu_adalah_yang_terkecil(): void
     {
         $produk = $this->produk();

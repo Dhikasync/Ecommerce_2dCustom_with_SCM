@@ -7,10 +7,9 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Design;
 use App\Models\Produk\Variant;
-use Illuminate\Filesystem\FilesystemAdapter;
+use App\Support\GambarPublik;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * FR-CART-01, UC-24: tambah, ubah jumlah, hapus item. Satu keranjang per User
@@ -29,8 +28,6 @@ class KeranjangController extends Controller
     private const PESAN_CUSTOM_TANPA_DESAIN = 'Produk custom harus ditambahkan dari preview desain';
 
     private const PESAN_DESAIN_TIDAK_DITEMUKAN = 'Desain tidak ditemukan';
-
-    private const DISK = 'public';
 
     /** FR-CART-01 #1/#5, srs.md:513-514: produk jadi dan custom tidak dicampur. */
     public function tampil(Request $request): JsonResponse
@@ -209,7 +206,7 @@ class KeranjangController extends Controller
             'variant_id' => $item->variant_id,
             'design_id' => $item->design_id,
             'nama' => $varian->product->nama,
-            'gambar_url' => $this->urlGambar($varian->product->gambar),
+            'gambar_url' => GambarPublik::url($varian->product->gambar),
             'sku' => $varian->sku,
             'ukuran' => $varian->ukuran,
             'warna' => $varian->warna,
@@ -228,18 +225,5 @@ class KeranjangController extends Controller
     private function tidakDitemukan(): JsonResponse
     {
         return response()->json(['message' => self::PESAN_ITEM_TIDAK_DITEMUKAN], 404);
-    }
-
-    private function urlGambar(?string $path): ?string
-    {
-        if ($path === null) {
-            return null;
-        }
-
-        // `url()` ada di kontrak Cloud/FilesystemAdapter, bukan Filesystem.
-        /** @var FilesystemAdapter $disk */
-        $disk = Storage::disk(self::DISK);
-
-        return $disk->url($path);
     }
 }
