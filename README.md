@@ -149,13 +149,37 @@ Urutan penyiapan data awal: akun Admin dibuat di luar aplikasi, alamat asal toko
 lewat `PUT /admin/pengaturan-pengiriman`, lalu daftar layanan kurir diisi dari RajaOngkir:
 
 ```bash
-php artisan rajaongkir:sinkron-layanan              # asal dari pengaturan pengiriman
-php artisan rajaongkir:sinkron-layanan --asal=4816  # atau pakai kode lokasi tertentu
-php artisan rajaongkir:sinkron-layanan --kurir=jne,pos  # batasi ke sebagian kurir
+# Rute contoh antar kota: layanan yang tersimpan adalah yang benar-benar dijual.
+php artisan rajaongkir:sinkron-layanan --kurir=jne,pos,tiki --tujuan=17601
+
+# Asal dari pengaturan pengiriman; --asal dipakai kalau ingin kode lain.
+php artisan rajaongkir:sinkron-layanan --asal=4816 --tujuan=17601
 ```
 
 Perintah ini memakai kuota RajaOngkir (satu permintaan per kurir) dan butuh jaringan.
 Layanan yang didapat tersimpan sebagai **nonaktif**; Admin memilih mana yang ditawarkan.
+
+Tanpa `--tujuan`, rute contohnya asal ke asal. Rute satu kecamatan hanya menawarkan
+layanan dalam kota (`CTC`) dan truk (`JTR`), bukan `REG`/`YES` antar kota, sehingga
+perintah memberi peringatan dan hasilnya tidak mewakili layanan yang dijual toko.
+
+Kuota RajaOngkir dihitung **per panggilan HTTP**, bukan per endpoint: pencarian lokasi
+(`GET /lokasi`) sama mahalnya dengan hitung tarif (`POST /checkout/ongkir`). Karena itu
+batasi `--kurir` ke kurir yang dipakai, dan jangan jalankan sinkronisasi berulang tanpa
+alasan — hasilnya idempoten di database, tetapi tetap memotong kuota.
+
+Di Windows, `php.ini` sering tidak punya CA bundle sehingga panggilan nyata gagal dengan
+`cURL error 60: SSL certificate ... unable to get local issuer certificate`. Perbaikannya
+di luar repo:
+
+```ini
+; php.ini
+curl.cainfo = "D:\php\extras\ssl\cacert.pem"
+openssl.cafile = "D:\php\extras\ssl\cacert.pem"
+```
+
+Berkas CA-nya diunduh dari `https://curl.se/ca/cacert.pem`. Tanpa itu `GET /lokasi` dan
+`POST /checkout/ongkir` dijawab `422` walau `RAJAONGKIR_API_KEY` benar.
 
 ## Pengujian
 
@@ -314,8 +338,10 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Pesan "Keranjang berubah, periksa kembali item Anda" adalah pilihan implementasi**: skenario #7 hanya menetapkan sistem membatalkan pembuatan pesanan dan menampilkan penjelasan item bermasalah, tanpa kalimat baku. Yang dipakai sebagai penjelasan adalah `label` item dari dokumen ("Produk tidak tersedia", "Stok tidak mencukupi", pesan MOQ). Pemeriksaan yang sama diulang di dalam transaksi; kalau stok habis di antara dua langkah, jawabannya tetap `422` dengan label yang sama.
 - **SLA pesanan memakai yang terpanjang**: FR-CDSN-06 menetapkan estimasi per produk custom, sedangkan checkout bisa berisi beberapa produk. Produksi baru selesai setelah item paling lama ikut selesai, jadi respons memakai `max(sla_hari)` dan `order_items.sla_hari` menyimpan salinan per item (FR-CDSN-07 #3: pesanan berjalan tidak ikut berubah saat SLA produk diubah).
 - **Pesanan custom tanpa `kadaluwarsa_pada`**: batas 24 jam hanya berlaku pada "Menunggu Pembayaran" (Lampiran A, `srs.md:822`), sedangkan pesanan custom lahir "Menunggu Validasi" dan baru masuk batas bayar setelah desain disetujui (FR-PAYM-02).
+- **Rute contoh sinkronisasi ditentukan `--tujuan`, bukan asal = tujuan**: `service` hanya keluar per rute, dan rute dalam satu kecamatan hanya memberi `CTC`/`JTR*`, bukan `REG`/`YES`. Tanpa `--tujuan` perintah tetap berjalan (perilaku lama) tetapi memberi peringatan, supaya alasan hasilnya tidak mewakili layanan antar kota terlihat langsung, bukan baru ketahuan setelah tabel terisi.
+- **`filter=lowest` tidak dikirim ke RajaOngkir**: parameter itu sudah dicoba pada rute nyata dan diabaikan — tujuh layanan tetap dikembalikan. Membiarkannya di kode membuat pembaca mengira daftar tarif sudah disaring, padahal penyaringan yang benar dilakukan dengan `firstWhere('layanan', ...)` di `biayaOngkir()`. Yang disimpan tetap apa adanya dari API, sesuai `srs.md:809`.
 - **Daftar kurir dan layanan berasal dari RajaOngkir, bukan daftar tulisan tangan (FR-CKOT-04 #2)**: `srs.md:228` dan `:289` menyatakan layanan kurir yang didukung datang dari API Kurir, dan `srs.md:809` melarang membangun komponen tarif sendiri. Karena RajaOngkir tidak punya endpoint "daftar layanan" — `service` seperti `REG`/`YES`/`OKE` hanya keluar dari `POST /calculate/domestic-cost` untuk satu rute tertentu — daftar diisi perintah `php artisan rajaongkir:sinkron-layanan`, bukan seeder. Yang tetap statis hanya **kode** kurir (17 kode dari dokumentasi RajaOngkir) karena itu memang kontrak, bukan hasil panggilan. Dokumen tetap tidak punya skenario menambah layanan dari aplikasi, jadi tidak ada route tambah; baris baru lahir `is_aktif = false` dan `is_aktif` baris lama tidak disentuh supaya sinkronisasi ulang tidak menghidupkan layanan yang sudah dimatikan Admin.
-- **Keterbatasan sinkronisasi layanan**: perintah memakai satu rute contoh (asal ke asal, berat 1000 g, tarif termurah), jadi layanan yang hanya tersedia di sebagian rute bisa tidak ikut tersimpan. Berat tidak mengubah daftar layanan, hanya tarifnya. Rute contoh dipilih sekali dan tidak disimpan sebagai aturan bisnis.
+- **Keterbatasan sinkronisasi layanan**: perintah memakai satu rute contoh (berat 1000 g), jadi layanan yang hanya tersedia di rute lain bisa tidak ikut tersimpan. Berat tidak mengubah daftar layanan, hanya tarifnya. Rute contoh dipilih sekali dan tidak disimpan sebagai aturan bisnis.
 - **Aktif dan nonaktif sebagai dua endpoint, bukan satu `PUT {is_aktif}`**: penolakan FR-CKOT-04 #4 hanya berlaku pada aksi mematikan layanan terakhir. Memisahkan URL membuat niat User terbaca dari route, bukan dari isi body yang bisa salah bentuk, dan pesan penolakan tidak pernah muncul saat Admin justru sedang mengaktifkan.
 - **Penjagaan "minimal satu layanan aktif" hidup di controller**: aturan ini menghitung baris **lain**, sedangkan `CHECK` constraint PostgreSQL tidak bisa melakukannya. Konsekuensi yang diterima: dua permintaan nonaktif yang benar-benar bersamaan masih bisa menurunkan jumlah layanan aktif menjadi nol — hutang yang sama dengan keunikan nama kategori (lihat butir di atas), dan tidak ditutup dengan `lockForUpdate` karena menambah kunci tabel untuk keadaan yang belum pernah terjadi.
 - **Alamat asal toko memakai `LokasiDitawarkan` yang sama dengan alamat User**: FR-CKOT-04 #1 secara eksplisit merujuk FR-PROF-01 #11/#12, jadi kode lokasi wajib berasal dari hasil `GET /lokasi` dan `label_lokasi` kiriman klien diabaikan. Tabelnya `shop_settings` dengan `CHECK (id = 1)`; karena `id` tidak ada di `$fillable`, baris pertama dibuat dengan `id = 1` ditulis eksplisit — `updateOrCreate(['id' => 1], ...)` akan membuang `id` saat insert dan gagal begitu urutan id sudah lewat dari 1.

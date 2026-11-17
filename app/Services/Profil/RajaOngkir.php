@@ -79,7 +79,6 @@ class RajaOngkir
                 'destination' => $tujuan,
                 'weight' => $beratGram,
                 'courier' => $kurir,
-                'filter' => 'lowest',
             ]);
         } catch (ConnectionException $e) {
             throw new RajaOngkirException('RajaOngkir tidak dapat dihubungi', previous: $e);

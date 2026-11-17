@@ -141,6 +141,34 @@ class SinkronLayananTest extends TestCase
             && $request['destination'] === '4816');
     }
 
+    public function test_opsi_tujuan_menentukan_lokasi_tujuan(): void
+    {
+        $this->alamatAsal();
+        $this->palsukanTarif(['jne' => ['REG']]);
+
+        $this->artisan('rajaongkir:sinkron-layanan', [
+            '--kurir' => 'jne',
+            '--asal' => '4900',
+            '--tujuan' => '17601',
+        ])->assertExitCode(0);
+
+        Http::assertSent(fn (Request $request) => $request['origin'] === '4900'
+            && $request['destination'] === '17601');
+    }
+
+    public function test_tanpa_tujuan_memakai_asal_dan_memberi_peringatan(): void
+    {
+        $this->alamatAsal();
+        $this->palsukanTarif(['jne' => ['REG']]);
+
+        $this->artisan('rajaongkir:sinkron-layanan', ['--kurir' => 'jne'])
+            ->expectsOutputToContain('hanya memberi layanan dalam kota')
+            ->assertExitCode(0);
+
+        Http::assertSent(fn (Request $request) => $request['origin'] === '4816'
+            && $request['destination'] === '4816');
+    }
+
     public function test_gangguan_koneksi_dilaporkan_sebagai_kegagalan(): void
     {
         $this->alamatAsal();

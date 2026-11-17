@@ -10,7 +10,8 @@ use Illuminate\Console\Command;
 
 /**
  * FR-CKOT-04 #2, srs.md:228: layanan kurir berasal dari RajaOngkir, bukan daftar
- * tulisan tangan. Rute contoh asal-ke-asal memberi tarif termurah.
+ * tulisan tangan. `service` hanya keluar per rute, jadi rute contohnya ditentukan
+ * lewat --asal dan --tujuan.
  */
 class SinkronLayananKurir extends Command
 {
@@ -25,6 +26,7 @@ class SinkronLayananKurir extends Command
 
     protected $signature = 'rajaongkir:sinkron-layanan
         {--asal= : Kode lokasi asal; default dari pengaturan pengiriman}
+        {--tujuan= : Kode lokasi tujuan; default sama dengan asal}
         {--kurir= : Kode kurir dipisah koma; default semua yang didukung}';
 
     protected $description = 'Menyimpan layanan kurir dari RajaOngkir sebagai data awal Nonaktif';
@@ -39,11 +41,21 @@ class SinkronLayananKurir extends Command
             return self::FAILURE;
         }
 
+        $tujuan = $this->option('tujuan');
+        $tujuan = is_string($tujuan) && $tujuan !== '' ? $tujuan : null;
+
+        // Satu kecamatan hanya menawarkan layanan dalam kota (mis. CTC), bukan
+        // layanan antar kota yang dijual toko, jadi rute itu perlu disebut.
+        if ($tujuan === null) {
+            $this->warn('Tanpa --tujuan, rute asal ke asal hanya memberi layanan dalam kota.');
+            $tujuan = $asal;
+        }
+
         $gagal = 0;
 
         foreach ($this->daftarKurir() as $kode) {
             try {
-                $layanan = $rajaOngkir->hitungOngkir($asal, $asal, self::BERAT_CONTOH_GRAM, $kode);
+                $layanan = $rajaOngkir->hitungOngkir($asal, $tujuan, self::BERAT_CONTOH_GRAM, $kode);
             } catch (RajaOngkirException $e) {
                 $this->error("{$kode}: gagal — {$e->getMessage()}");
                 $gagal++;
