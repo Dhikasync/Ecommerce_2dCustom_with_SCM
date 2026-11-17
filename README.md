@@ -17,9 +17,9 @@ Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS 
 | Modul | Kode | Status |
 | --- | --- | --- |
 | Autentikasi | FR-AUTH | ✅ lengkap: login Admin/User, registrasi, verifikasi email, ganti email dari profil, lupa/reset password, logout, middleware role |
-| Produk (admin) | FR-PROD | ✅ sisi admin: produk + gambar, varian (SKU/harga/berat/MOQ), kategori. Penegakan MOQ saat tambah ke keranjang menyusul di modul CART (FR-PROD-03 #2/#3) |
+| Produk (admin) | FR-PROD | ✅ sisi admin: produk + gambar, varian (SKU/harga/berat/MOQ), kategori. Penegakan MOQ saat tambah ke keranjang sudah berjalan di FR-CART-01 |
 | Katalog produk | FR-KTLG | ✅ semua skenario: daftar produk (FR-KTLG-01), detail produk (FR-KTLG-02), filter kategori/jenis + pencarian + urut harga + reset filter (FR-KTLG-03) |
-| Keranjang & checkout | FR-CART | ⏳ |
+| Keranjang & checkout | FR-CART | 🔄 berjalan: FR-CART-01 kelola keranjang (tambah/ubah/hapus, dua bagian jadi & custom, MOQ + Stok Tersedia). Sisi custom masih dummy (`design_id` diterima tanpa aturan "hanya dari preview") sampai FR-CDSN-04. FR-CART-02 ringkasan menyusul |
 | Pesanan & pembayaran | FR-ORDR, FR-PAYM | ⏳ |
 | Desain kustom 2D | FR-DSN | ⏳ |
 | Rantai pasok (SCM) | FR-SCM | ⏳ |
@@ -190,7 +190,11 @@ Semua route dipisah per modul di `routes/*.php` dan memakai session guard. Respo
 | GET | `/profil/email/verify/{id}/{hash}` | `profil.email.verify` | `signed`, throttle 6/menit | FR-AUTH-06 #7 — konfirmasi email baru (tautan 24 jam, sekali pakai) |
 | GET | `/katalog` | `katalog.index` | — | FR-KTLG-01, UC-12 — daftar produk aktif: foto, nama, badge Custom, `harga_mulai` dari varian termurah, MOQ terkecil, `status_stok`, rating, paginasi `per_page` (12, maks 50). FR-KTLG-03 — filter `kategori_id`, `jenis` (`jadi`/`custom`), cari `q`, urut `harga_asc` |
 | GET | `/katalog/{id}` | `katalog.show` | — | FR-KTLG-02, UC-13 — detail produk: galeri, deskripsi, kategori, `harga_mulai`, dan `varian` (ukuran/warna/ketebalan, harga, berat, MOQ, `stok_tersedia`). `404` "Produk tidak ditemukan" untuk produk terhapus, nonaktif, atau id non-angka |
-| GET | `/kategori` | `katalog.kategori` | — | FR-KTLG-03 #1 — daftar kategori publik untuk pilihan filter: `id` dan `nama`, urut nama |
+| GET | `/kategori` | `katalog.kategori` | - | FR-KTLG-03 #1 - daftar kategori publik untuk pilihan filter: `id` dan `nama`, urut nama |
+| GET | `/keranjang` | `keranjang.index` | `auth`, `active` | FR-CART-01 #1/#5, UC-24 - isi keranjang dalam dua bagian `jadi` dan `custom`; `422`/`404` lihat catatan. Pesan "Keranjang Anda kosong" hanya saat keduanya kosong |
+| POST | `/keranjang/item` | `keranjang.item.store` | `auth`, `active` | FR-CART-01 #1/#2 - tambah item: `variant_id`, `quantity`, `design_id` (custom). Varian sama digabung. `422` "Minimal pemesanan untuk varian ini adalah {moq} pcs" / "Stok tidak mencukupi" / "Produk tidak tersedia" / "Produk custom harus ditambahkan dari preview desain"; `404` "Desain tidak ditemukan" |
+| PATCH | `/keranjang/item/{id}` | `keranjang.item.update` | `auth`, `active` | FR-CART-01 #3 - ubah `quantity` saja; MOQ dan Stok Tersedia diperiksa ulang, `harga_satuan` tidak berubah. `404` "Item keranjang tidak ditemukan" untuk item User lain |
+| DELETE | `/keranjang/item/{id}` | `keranjang.item.destroy` | `auth`, `active` | FR-CART-01 #4 - hapus item; `404` "Item keranjang tidak ditemukan" untuk item User lain |
 | GET | `/admin/kategori` | `kategori.index` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - daftar kategori urut nama |
 | POST | `/admin/kategori` | `kategori.store` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - tambah kategori (nama unik tanpa beda huruf) |
 | PUT | `/admin/kategori/{id}` | `kategori.update` | `auth`, `active`, `role:admin_ecommerce` | FR-PROD-02 - ubah nama/deskripsi |
@@ -253,6 +257,13 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Daftar kategori publik (`GET /kategori`)**: skenario #1 meminta User memilih kategori, tetapi `GET /admin/kategori` butuh login. Endpoint publik berisi `id` dan `nama` semua kategori, termasuk yang belum punya produk aktif — keadaan itu sudah diatur skenario #4 (filter tanpa hasil). Daftar ini tidak dititipkan ke `meta` katalog supaya tidak ikut terkirim di setiap halaman dan setiap scroll.
 - **Serialisasi tanggal ke JSON masih UTC** (hutang, bukan keputusan): `toJson()` model mengirim `2026-11-12T05:57:47.000000Z`, bukan `+07:00`. Saat ini belum ada endpoint yang mengirim timestamp mentah — semua respons menulis kolom satu per satu — jadi belum melanggar NFR-LOC-01. Begitu modul Pesanan/Notifikasi mulai mengirim waktu, tanggal harus diformat WIB di lapisan respons (misalnya `->format('Y-m-d\TH:i:sP')`) atau lewat satu `serializeDate()` bersama, bukan dibiarkan `Z`.
 - **Pesan `"Kategori tidak ditemukan"`**: dokumen hanya menetapkan pesan duplikat dan pesan kategori terpakai (`srs.md:406-407`); pesan untuk id yang tidak ada mengikuti pola `"Alamat tidak ditemukan"` dan dijawab `404`.
+- **Keranjang memerlukan login (FR-CART-01)**: `GET/POST/PATCH/DELETE /keranjang` memakai `auth` + `active`; Guest yang mencoba mendapat `401`, karena `srs.md:430` menyebut keranjang hanya untuk User yang sudah masuk.
+- **Satu baris per varian**: partial unique index `cart_items_produk_jadi_unique` dan `cart_items_produk_custom_unique` memaksa varian jadi yang sama menyatu dan item custom unik per `(cart_id, variant_id, design_id)`. Karena itu menambah varian yang sudah ada **menjumlahkan** `quantity` pada baris lama, bukan membuat baris baru. MOQ dan Stok Tersedia diperiksa terhadap jumlah **setelah digabung** — mengirim 1 pcs dengan MOQ 3 ditolak, tetapi menambah 1 pcs ke baris berisi 2 pcs diterima karena pesanannya menjadi 3.
+- **Harga dikunci saat item masuk (FR-CART-01 #6)**: `cart_items.harga_satuan` diisi `variants.harga` ketika item ditambahkan dan tidak pernah dihitung ulang saat katalog naik atau saat jumlah diubah. Checkout (`FR-CKOT-01`) memakai angka ini, sehingga User membayar harga yang dilihatnya saat memasukkan barang.
+- **Stok tidak dikunci di keranjang**: sesuai SRS 4.6.2, keranjang hanya **memeriksa** Stok Tersedia; `stok_direservasi` baru bertambah saat checkout. Konsekuensinya barang di keranjang bisa habis sebelum checkout, dan keadaan itu ditangani ringkasan (FR-CART-02).
+- **Batas stok hanya untuk produk jadi**: produk custom dibuat sesuai pesanan, jadi `stok_fisik` gudang tidak membatasi jumlahnya; MOQ tetap berlaku. `design_id` yang dikirim untuk produk jadi diabaikan supaya baris jadi tidak pernah terikat desain.
+- **Sisi custom masih dummy**: FR-CART-01 #2 mensyaratkan item custom hanya masuk dari Preview Desain (FR-CDSN-04), tetapi modul itu belum dibangun. Untuk sekarang `POST /keranjang/item` menerima `design_id` dan memeriksa bahwa desain itu milik User sendiri dan variannya cocok (`404` "Desain tidak ditemukan"), tanpa memeriksa status atau asal preview. Aturan "hanya dari preview" ditambahkan saat FR-CDSN-04 dikerjakan.
+- **Pesan `"Desain tidak ditemukan"`** dipakai juga saat desain ada tetapi milik User lain atau variannya berbeda, dengan `404` mengikuti pola NFR-SEC-03: keberadaan data User lain tidak dibuka.
 
 ## Aturan proyek yang tidak boleh dilanggar
 

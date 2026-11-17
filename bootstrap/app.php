@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::middleware('web')->group(base_path('routes/profil.php'));
             Route::middleware('web')->group(base_path('routes/produk.php'));
             Route::middleware('web')->group(base_path('routes/katalog.php'));
+            Route::middleware('web')->group(base_path('routes/keranjang.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
