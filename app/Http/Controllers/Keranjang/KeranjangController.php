@@ -10,6 +10,7 @@ use App\Models\Produk\Variant;
 use App\Support\GambarPublik;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 /**
  * FR-CART-01, UC-24: tambah, ubah jumlah, hapus item. Satu keranjang per User
@@ -39,14 +40,8 @@ class KeranjangController extends Controller
             ->get();
 
         $data = [
-            'jadi' => $item->whereNull('design_id')
-                ->map(fn (CartItem $baris) => $this->ringkas($baris))
-                ->values()
-                ->all(),
-            'custom' => $item->whereNotNull('design_id')
-                ->map(fn (CartItem $baris) => $this->ringkas($baris))
-                ->values()
-                ->all(),
+            'jadi' => $this->bagian($item->whereNull('design_id')->values()),
+            'custom' => $this->bagian($item->whereNotNull('design_id')->values()),
         ];
 
         if ($item->isEmpty()) {
@@ -214,7 +209,54 @@ class KeranjangController extends Controller
             'quantity' => $item->quantity,
             'harga_satuan' => $item->harga_satuan,
             'subtotal' => $item->quantity * $item->harga_satuan,
+            // FR-CART-02 #1: item custom ditandai "Custom" di tampilan.
+            'is_custom' => $item->design_id !== null,
+            'label' => $this->label($item),
         ];
+    }
+
+    /**
+     * Satu bagian keranjang beserta total dan kesiapannya untuk checkout.
+     *
+     * @param  Collection<int, CartItem>  $item
+     * @return array<string, mixed>
+     */
+    private function bagian(Collection $item): array
+    {
+        $baris = $item->map(fn (CartItem $satu) => $this->ringkas($satu))->values()->all();
+
+        return [
+            'items' => $baris,
+            'total' => array_sum(array_column($baris, 'subtotal')),
+            // Skenario #2: satu item bermasalah menahan checkout seluruh bagian.
+            'bisa_checkout' => $baris !== []
+                && collect($baris)->every(fn (array $satu) => $satu['label'] === null),
+        ];
+    }
+
+    /**
+     * Skenario #2/#3 dan srs.md:516: stok, MOQ, dan produk aktif diperiksa ulang
+     * saat keranjang dibuka, bukan hanya saat item dimasukkan.
+     */
+    private function label(CartItem $item): ?string
+    {
+        $varian = $item->variant;
+
+        if (! $varian->product->is_aktif) {
+            return self::PESAN_PRODUK_TIDAK_TERSEDIA;
+        }
+
+        if ($item->quantity < $varian->moq) {
+            return "Minimal pemesanan untuk varian ini adalah {$varian->moq} pcs";
+        }
+
+        // Teksnya sama dengan pesan penolakan FR-CART-01: dokumen memakai satu
+        // kalimat untuk pesan maupun label.
+        if ($item->quantity > $varian->stok_tersedia) {
+            return self::PESAN_STOK;
+        }
+
+        return null;
     }
 
     private function tolak(string $pesan): JsonResponse

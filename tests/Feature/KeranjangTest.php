@@ -60,8 +60,8 @@ class KeranjangTest extends TestCase
 
         $this->getJson('/keranjang')
             ->assertOk()
-            ->assertJsonPath('data.jadi.0.harga_satuan', 20000)
-            ->assertJsonPath('data.jadi.0.subtotal', 40000);
+            ->assertJsonPath('data.jadi.items.0.harga_satuan', 20000)
+            ->assertJsonPath('data.jadi.items.0.subtotal', 40000);
     }
 
     /** Index unik `cart_items_produk_jadi_unique` memaksa varian sama menyatu. */
@@ -77,9 +77,9 @@ class KeranjangTest extends TestCase
 
         $this->getJson('/keranjang')
             ->assertOk()
-            ->assertJsonCount(1, 'data.jadi')
-            ->assertJsonPath('data.jadi.0.quantity', 5)
-            ->assertJsonPath('data.jadi.0.harga_satuan', 20000);
+            ->assertJsonCount(1, 'data.jadi.items')
+            ->assertJsonPath('data.jadi.items.0.quantity', 5)
+            ->assertJsonPath('data.jadi.items.0.harga_satuan', 20000);
     }
 
     /** FR-PROD-03 #2: pesan persis dokumen. */
@@ -196,7 +196,7 @@ class KeranjangTest extends TestCase
         $this->actingAs($this->user)
             ->getJson('/keranjang')
             ->assertOk()
-            ->assertJsonCount(0, 'data.jadi');
+            ->assertJsonCount(0, 'data.jadi.items');
     }
 
     /** Keranjang milik User lain tidak boleh tersentuh lewat id item. */
@@ -228,8 +228,8 @@ class KeranjangTest extends TestCase
             ->getJson('/keranjang')
             ->assertOk()
             ->assertJsonPath('message', 'Keranjang Anda kosong')
-            ->assertJsonCount(0, 'data.jadi')
-            ->assertJsonCount(0, 'data.custom');
+            ->assertJsonCount(0, 'data.jadi.items')
+            ->assertJsonCount(0, 'data.custom.items');
     }
 
     /** FR-CART-01 #2 (dummy): item custom masuk ke bagian terpisah. */
@@ -248,9 +248,9 @@ class KeranjangTest extends TestCase
 
         $this->getJson('/keranjang')
             ->assertOk()
-            ->assertJsonCount(0, 'data.jadi')
-            ->assertJsonCount(1, 'data.custom')
-            ->assertJsonPath('data.custom.0.design_id', $desain->id);
+            ->assertJsonCount(0, 'data.jadi.items')
+            ->assertJsonCount(1, 'data.custom.items')
+            ->assertJsonPath('data.custom.items.0.design_id', $desain->id);
     }
 
     /**
@@ -312,13 +312,151 @@ class KeranjangTest extends TestCase
             ->postJson('/keranjang/item', ['variant_id' => $varian->id, 'quantity' => 1])
             ->assertCreated();
 
-        $item = $this->getJson('/keranjang')->assertOk()->json('data.jadi.0');
+        $item = $this->getJson('/keranjang')->assertOk()->json('data.jadi.items.0');
 
         $this->assertSame('Tote Bag', $item['nama']);
         $this->assertSame('M', $item['ukuran']);
         $this->assertSame('Hitam', $item['warna']);
         $this->assertSame('12 oz', $item['ketebalan']);
         $this->assertStringContainsString('/storage/produk/tote.jpg', $item['gambar_url']);
+    }
+
+    /** Skenario #1: dua bagian, subtotal per item, dan total per bagian. */
+    public function test_ringkasan_menampilkan_subtotal_dan_total_per_bagian(): void
+    {
+        $tote = $this->varian(['sku' => 'A', 'harga' => 20000]);
+        $pouch = $this->varian(['sku' => 'B', 'harga' => 15000]);
+        $custom = $this->varian(['sku' => 'C', 'harga' => 30000], [
+            'nama' => 'Paper Bag Custom',
+            'tipe' => 'custom',
+            'sla_hari' => 3,
+        ]);
+        $desain = $this->desain($custom);
+
+        $this->tambah($tote, 2);
+        $this->tambah($pouch, 3);
+        $this->tambah($custom, 1, $desain->id);
+
+        $this->getJson('/keranjang')
+            ->assertOk()
+            ->assertJsonCount(2, 'data.jadi.items')
+            ->assertJsonCount(1, 'data.custom.items')
+            ->assertJsonPath('data.jadi.items.0.subtotal', 40000)
+            ->assertJsonPath('data.jadi.items.1.subtotal', 45000)
+            ->assertJsonPath('data.jadi.total', 85000)
+            ->assertJsonPath('data.custom.total', 30000)
+            ->assertJsonPath('data.custom.items.0.is_custom', true)
+            ->assertJsonPath('data.jadi.items.0.is_custom', false);
+    }
+
+    /** Skenario #1: bagian custom menyimpan label "Custom" untuk tampilan. */
+    public function test_item_custom_ditandai_untuk_label_custom(): void
+    {
+        $varian = $this->varian([], ['tipe' => 'custom', 'sla_hari' => 3]);
+        $desain = $this->desain($varian);
+
+        $this->tambah($varian, 1, $desain->id);
+
+        $this->getJson('/keranjang')
+            ->assertOk()
+            ->assertJsonPath('data.custom.items.0.is_custom', true)
+            ->assertJsonCount(0, 'data.jadi.items');
+    }
+
+    /** Skenario #2: stok berkurang setelah item masuk keranjang. */
+    public function test_stok_berkurang_ditandai_dan_checkout_dinonaktifkan(): void
+    {
+        $varian = $this->varian(['stok_fisik' => 5]);
+        $this->tambah($varian, 3);
+
+        // Pembelian User lain di luar skenario ini menghabiskan stok tersisa.
+        $varian->update(['stok_direservasi' => 4]);
+
+        $this->getJson('/keranjang')
+            ->assertOk()
+            ->assertJsonPath('data.jadi.items.0.label', 'Stok tidak mencukupi')
+            ->assertJsonPath('data.jadi.bisa_checkout', false);
+    }
+
+    /** Skenario #2: penanda hilang setelah User menyesuaikan jumlah. */
+    public function test_penanda_hilang_setelah_quantity_disesuaikan(): void
+    {
+        $varian = $this->varian(['stok_fisik' => 5]);
+        $this->tambah($varian, 4);
+
+        $varian->update(['stok_direservasi' => 3]);
+
+        $itemId = $this->getJson('/keranjang')->json('data.jadi.items.0.id');
+
+        $this->actingAs($this->user)
+            ->patchJson("/keranjang/item/{$itemId}", ['quantity' => 2])
+            ->assertOk();
+
+        $this->getJson('/keranjang')
+            ->assertOk()
+            ->assertJsonPath('data.jadi.items.0.label', null)
+            ->assertJsonPath('data.jadi.bisa_checkout', true);
+    }
+
+    /** Skenario #3: produk dinonaktifkan setelah masuk keranjang. */
+    public function test_produk_dinonaktifkan_ditandai_tidak_tersedia(): void
+    {
+        $varian = $this->varian();
+        $this->tambah($varian, 1);
+
+        $varian->product->update(['is_aktif' => false]);
+
+        $this->getJson('/keranjang')
+            ->assertOk()
+            ->assertJsonPath('data.jadi.items.0.label', 'Produk tidak tersedia')
+            ->assertJsonPath('data.jadi.bisa_checkout', false);
+    }
+
+    /** SRS 4.6.2: ringkasan juga memvalidasi MOQ, bukan hanya stok. */
+    public function test_moq_yang_naik_setelah_item_masuk_ditandai(): void
+    {
+        $varian = $this->varian(['moq' => 1, 'stok_fisik' => 10]);
+        $this->tambah($varian, 2);
+
+        // Admin menaikkan MOQ (FR-PROD-01 #3) setelah item ada di keranjang.
+        $varian->update(['moq' => 3]);
+
+        $this->getJson('/keranjang')
+            ->assertOk()
+            ->assertJsonPath('data.jadi.items.0.label', 'Minimal pemesanan untuk varian ini adalah 3 pcs')
+            ->assertJsonPath('data.jadi.bisa_checkout', false);
+    }
+
+    /** Item sehat tidak berlabel; bagian kosong tidak bisa di-checkout. */
+    public function test_item_sehat_tanpa_label_dan_bagian_kosong_tidak_bisa_checkout(): void
+    {
+        $varian = $this->varian(['stok_fisik' => 5]);
+        $this->tambah($varian, 2);
+
+        $this->getJson('/keranjang')
+            ->assertOk()
+            ->assertJsonPath('data.jadi.items.0.label', null)
+            ->assertJsonPath('data.jadi.bisa_checkout', true)
+            ->assertJsonPath('data.custom.total', 0)
+            ->assertJsonPath('data.custom.bisa_checkout', false);
+    }
+
+    /** Skenario #2: satu item bermasalah mematikan checkout seluruh bagian. */
+    public function test_satu_item_bermasalah_mematikan_checkout_bagian(): void
+    {
+        $sehat = $this->varian(['sku' => 'A', 'stok_fisik' => 5]);
+        $bermasalah = $this->varian(['sku' => 'B', 'stok_fisik' => 5]);
+
+        $this->tambah($sehat, 1);
+        $this->tambah($bermasalah, 2);
+
+        $bermasalah->update(['stok_direservasi' => 5]);
+
+        $this->getJson('/keranjang')
+            ->assertOk()
+            ->assertJsonPath('data.jadi.items.0.label', null)
+            ->assertJsonPath('data.jadi.items.1.label', 'Stok tidak mencukupi')
+            ->assertJsonPath('data.jadi.bisa_checkout', false);
     }
 
     /** SRS 4.4.1/srs.md:430: keranjang memerlukan login. */
@@ -328,6 +466,18 @@ class KeranjangTest extends TestCase
 
         $this->postJson('/keranjang/item', ['variant_id' => 1, 'quantity' => 1])
             ->assertUnauthorized();
+    }
+
+    /** Menambah item tanpa mengulang boilerplate di test ringkasan. */
+    private function tambah(Variant $varian, int $jumlah, ?int $designId = null): void
+    {
+        $this->actingAs($this->user)
+            ->postJson('/keranjang/item', array_filter([
+                'variant_id' => $varian->id,
+                'quantity' => $jumlah,
+                'design_id' => $designId,
+            ]))
+            ->assertCreated();
     }
 
     /**
