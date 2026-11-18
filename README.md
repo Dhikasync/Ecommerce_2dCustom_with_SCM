@@ -25,7 +25,7 @@ Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS 
 | Rantai pasok (SCM) | FR-SCM | ⏳ |
 | Profil & alamat | FR-PROF | ✅ semua skenario FR-PROF-01: lihat/ubah profil, ganti email, ubah password, cari lokasi, kelola alamat + alamat utama. Di luar skenario itu, `srs.md:378` meminta sistem menolak hapus alamat yang dipakai pesanan berjalan; aturan itu **belum dibangun** karena `AlamatController::hapus` baru memeriksa "minimal satu alamat tersisa", padahal pesanan sudah bisa dibentuk sejak FR-CKOT-01 |
 | Dashboard admin | FR-DASH | ⏳ ditunda sampai UI dimulai |
-| Proses otomatis berbasis waktu | FR-SYS-01 | 🔄 berjalan: #1 (pembayaran kedaluwarsa) lewat `php artisan orders:kedaluwarsa`, dijadwalkan tiap menit — pesanan yang lewat 24 jam dibatalkan, Stok Direservasi dilepas, pembayaran `belum_dibayar` menjadi `kedaluwarsa`, riwayat status ditulis, dan User diberi kabar email + in-app. #7 (proses tidak diterapkan ganda) dijaga dengan membaca ulang status di bawah kunci. Belum ada: #2 (masa revisi desain), #3–#6, #8 karena bergantung modul CDSN/ORDR/SCM |
+| Proses otomatis berbasis waktu | FR-SYS-01 | 🔄 berjalan: #1 (pembayaran kedaluwarsa) lewat `php artisan orders:kedaluwarsa`, dijadwalkan tiap menit - pesanan yang lewat 24 jam dibatalkan dengan `alasan_pembatalan` tercatat, Stok Direservasi dilepas, pembayaran `belum_dibayar`/`gagal` menjadi `kedaluwarsa`, riwayat status ditulis, dan User diberi kabar email + in-app. #7 (proses tidak diterapkan ganda) dijaga dengan membaca ulang status di bawah kunci. Belum ada: #2 (masa revisi desain), #3-#6, #8 karena bergantung modul CDSN/ORDR/SCM |
 
 Catatan jujur: login Admin sudah berjalan, tetapi **dashboard belum ada**; sementara Admin diarahkan ke halaman utama sesuai `user-story.md:19`. Pada FR-PROF, seluruh skenario FR-PROF-01 sudah berjalan, tetapi satu reaksi sistem di `srs.md:378` — menolak hapus alamat yang dipakai pesanan berjalan — belum dibangun; lihat baris FR-PROF.
 
@@ -202,12 +202,13 @@ php artisan orders:kedaluwarsa
 php artisan schedule:list
 ```
 
-Efek satu pesanan: status pesanan `dibatalkan`, baris `payments` yang masih
-`belum_dibayar` menjadi `kedaluwarsa`, Stok Direservasi dilepas (Stok Fisik tidak
+Efek satu pesanan: status pesanan `dibatalkan` disertai `alasan_pembatalan`
+("Batas pembayaran 24 jam terlewat" dari scheduler, "Pembayaran kedaluwarsa di
+payment gateway" dari jalur `expire`), baris `payments` yang masih `belum_dibayar`
+atau `gagal` menjadi `kedaluwarsa`, Stok Direservasi dilepas (Stok Fisik tidak
 disentuh), satu baris riwayat status dengan `diubah_oleh` kosong, dan notifikasi
 email + in-app. Pesanan yang sudah Lunas dan pesanan custom yang masih
 Menunggu Validasi tidak ikut tersapu.
-
 
 Di Windows, `php.ini` sering tidak punya CA bundle sehingga panggilan nyata gagal dengan
 `cURL error 60: SSL certificate ... unable to get local issuer certificate`. Perbaikannya
@@ -230,7 +231,7 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **458 test lulus, 1704 assertion** (dijalankan lokal dan otomatis di CI).
+Status terakhir: **459 test lulus, 1710 assertion** (dijalankan lokal dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
@@ -387,7 +388,7 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Gangguan RajaOngkir diulang satu kali**: hanya gangguan koneksi dan balasan `5xx`, dengan jeda 200 ms. `4xx` tidak diulang karena kunci salah atau permintaan cacat tidak akan sembuh dengan pengulangan. Pengulangan ini tidak mengubah kontrak: kalau tetap gagal, jawabannya `422` "Ongkir belum dapat dihitung, silakan coba lagi" seperti skenario #8, dan pesanan tetap tidak dibuat (`srs.md:521`).
 - **`cost` dari RajaOngkir diperiksa sebelum menjadi uang**: harus bilangan bulat positif. Nilai `0` atau negatif ditolak dan alurnya jatuh ke pesan #8, karena `srs.md:520` melarang ongkir "diam-diam menjadi Rp 0" — dan nilai negatif akan menurunkan total pesanan.
 - **`Cache-Control: no-store` pada tiga respons checkout**: bukan aturan dokumen. Respons memuat alamat lengkap dan nomor telepon, jadi tidak boleh tinggal di cache browser atau proksi bersama.
-- **Reservasi yang kedaluwarsa kini dirilis otomatis (FR-SYS-01 #1)**: `orders.kadaluwarsa_pada` sebelumnya hanya ditulis tanpa ada yang menegakkan, sehingga `stok_direservasi` menggantung dan hanya bisa dikembalikan lewat Admin. Sekarang `php artisan orders:kedaluwarsa` (dijadwalkan tiap menit) membatalkan pesanan, melepas reservasi, menandai `payments` yang masih `belum_dibayar` menjadi `kedaluwarsa`, menulis riwayat status, dan mengirim kabar. Pesanan `menunggu_validasi` tidak ikut tersapu karena batasnya adalah masa revisi desain (FR-SYS-01 #2, belum dibangun).
+- **Reservasi yang kedaluwarsa kini dirilis otomatis (FR-SYS-01 #1)**: `orders.kadaluwarsa_pada` sebelumnya hanya ditulis tanpa ada yang menegakkan, sehingga `stok_direservasi` menggantung dan hanya bisa dikembalikan lewat Admin. Sekarang `php artisan orders:kedaluwarsa` (dijadwalkan tiap menit) membatalkan pesanan dengan `alasan_pembatalan` tercatat, melepas reservasi, menandai `payments` yang masih `belum_dibayar` atau `gagal` menjadi `kedaluwarsa`, menulis riwayat status, dan mengirim kabar. Pesanan `menunggu_validasi` tidak ikut tersapu karena batasnya adalah masa revisi desain (FR-SYS-01 #2, belum dibangun).
 - **Rute contoh sinkronisasi ditentukan `--tujuan`, bukan asal = tujuan**: `service` hanya keluar per rute, dan rute dalam satu kecamatan hanya memberi `CTC`/`JTR*`, bukan `REG`/`YES`. Tanpa `--tujuan` perintah tetap berjalan (perilaku lama) tetapi memberi peringatan, supaya alasan hasilnya tidak mewakili layanan antar kota terlihat langsung, bukan baru ketahuan setelah tabel terisi.
 - **`filter=lowest` tidak dikirim ke RajaOngkir**: parameter itu sudah dicoba pada rute nyata dan diabaikan — tujuh layanan tetap dikembalikan. Membiarkannya di kode membuat pembaca mengira daftar tarif sudah disaring, padahal penyaringan yang benar dilakukan dengan `firstWhere('layanan', ...)` di `biayaOngkir()`. Yang disimpan tetap apa adanya dari API, sesuai `srs.md:809`.
 - **Daftar kurir dan layanan berasal dari RajaOngkir, bukan daftar tulisan tangan (FR-CKOT-04 #2)**: `srs.md:228` dan `:289` menyatakan layanan kurir yang didukung datang dari API Kurir, dan `srs.md:809` melarang membangun komponen tarif sendiri. Karena RajaOngkir tidak punya endpoint "daftar layanan" — `service` seperti `REG`/`YES`/`OKE` hanya keluar dari `POST /calculate/domestic-cost` untuk satu rute tertentu — daftar diisi perintah `php artisan rajaongkir:sinkron-layanan`, bukan seeder. Yang tetap statis hanya **kode** kurir (17 kode dari dokumentasi RajaOngkir) karena itu memang kontrak, bukan hasil panggilan. Dokumen tetap tidak punya skenario menambah layanan dari aplikasi, jadi tidak ada route tambah; baris baru lahir `is_aktif = false` dan `is_aktif` baris lama tidak disentuh supaya sinkronisasi ulang tidak menghidupkan layanan yang sudah dimatikan Admin.

@@ -245,6 +245,8 @@ class CekStatusPembayaranTest extends TestCase
 
         $this->assertSame('kedaluwarsa', $pembayaran->refresh()->status);
         $this->assertSame('dibatalkan', $pesanan->refresh()->status);
+        // FR-ORDR-01 #4: alasan pembatalan terbaca di detail pesanan.
+        $this->assertSame('Pembayaran kedaluwarsa di payment gateway', $pesanan->alasan_pembatalan);
 
         // Stok Fisik tidak berubah, hanya reservasinya yang dilepas.
         $varian->refresh();

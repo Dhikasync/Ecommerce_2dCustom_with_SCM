@@ -31,7 +31,11 @@ class BatalkanPesananKedaluwarsa extends Command
             ->orderBy('id')
             ->chunkById(100, function ($daftar) use ($sinkron, $kabar, &$jumlah) {
                 foreach ($daftar as $pesanan) {
-                    if (! $sinkron->kedaluwarsakan($pesanan, 'Batas pembayaran 24 jam terlewat (FR-SYS-01 #1)')) {
+                    if (! $sinkron->kedaluwarsakan(
+                        $pesanan,
+                        'Batas pembayaran 24 jam terlewat',
+                        'Batas pembayaran 24 jam terlewat (FR-SYS-01 #1)',
+                    )) {
                         continue;
                     }
 

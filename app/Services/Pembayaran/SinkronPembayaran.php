@@ -122,7 +122,11 @@ class SinkronPembayaran
     private function kedaluwarsa(Order $pesanan, Payment $pembayaran, array $transaksi): string
     {
         $pembayaran->update([...$transaksi, 'status' => 'kedaluwarsa']);
-        $this->batalkanKarenaKedaluwarsa($pesanan, self::CATATAN_GATEWAY);
+        $this->batalkanKarenaKedaluwarsa(
+            $pesanan,
+            'Pembayaran kedaluwarsa di payment gateway',
+            self::CATATAN_GATEWAY,
+        );
 
         return 'kedaluwarsa';
     }
@@ -132,11 +136,13 @@ class SinkronPembayaran
      * pesanan yang melewati batas bayar. Memakai efek yang sama dengan `expire`
      * dari gateway, hanya pemicunya waktu, bukan notifikasi.
      *
+     * @param  string  $alasan  alasan untuk User (orders.alasan_pembatalan)
+     * @param  string  $catatan  catatan audit di riwayat status
      * @return bool true bila pesanan ini benar-benar dibatalkan sekarang
      */
-    public function kedaluwarsakan(Order $pesanan, string $catatan): bool
+    public function kedaluwarsakan(Order $pesanan, string $alasan, string $catatan): bool
     {
-        return DB::transaction(function () use ($pesanan, $catatan) {
+        return DB::transaction(function () use ($pesanan, $alasan, $catatan) {
             // Skenario #7: baca ulang di bawah kunci, karena User bisa saja baru
             // membayar setelah daftar kandidat dibaca scheduler.
             $segar = Order::whereKey($pesanan->id)->lockForUpdate()->first();
@@ -153,8 +159,13 @@ class SinkronPembayaran
                 return false;
             }
 
-            $segar->payments()->where('status', 'belum_dibayar')->update(['status' => 'kedaluwarsa']);
-            $this->batalkanKarenaKedaluwarsa($segar, $catatan);
+            // Lampiran B, status pembayaran: "Gagal ... menjadi Lunas atau
+            // Kedaluwarsa". Percobaan yang ditolak gateway ikut ditutup di sini.
+            $segar->payments()
+                ->whereIn('status', ['belum_dibayar', 'gagal'])
+                ->update(['status' => 'kedaluwarsa']);
+
+            $this->batalkanKarenaKedaluwarsa($segar, $alasan, $catatan);
 
             return true;
         });
@@ -197,11 +208,15 @@ class SinkronPembayaran
     }
 
     /** Pesanan berhenti di sini: reservasi dikembalikan, Stok Fisik tidak disentuh. */
-    private function batalkanKarenaKedaluwarsa(Order $pesanan, string $catatan): void
+    private function batalkanKarenaKedaluwarsa(Order $pesanan, string $alasan, string $catatan): void
     {
         if ($pesanan->status !== 'menunggu_pembayaran') {
             return;
         }
+
+        // FR-ORDR-01 #4: alasan pembatalan dibaca User di detail pesanan, jadi
+        // disimpan di pesanan sendiri, bukan hanya di catatan riwayat.
+        $pesanan->update(['alasan_pembatalan' => $alasan]);
 
         $this->ubahStatus($pesanan, 'dibatalkan', $catatan);
         $this->lepasReservasi($pesanan);

@@ -117,6 +117,7 @@ class PesananKedaluwarsaTest extends TestCase
 
         $this->assertSame('dibatalkan', $pesanan->refresh()->status);
         $this->assertSame('kedaluwarsa', $pembayaran->refresh()->status);
+        $this->assertSame('Batas pembayaran 24 jam terlewat', $pesanan->alasan_pembatalan);
 
         // Stok Fisik tidak disentuh: barang belum pernah keluar gudang.
         $varian->refresh();
@@ -147,6 +148,22 @@ class PesananKedaluwarsaTest extends TestCase
         $this->assertSame(0, OrderStatusHistory::count());
         $this->assertSame(0, Notification::count());
         Mail::assertNothingSent();
+    }
+
+    /**
+     * Lampiran B, status pembayaran: percobaan yang ditolak gateway masih boleh
+     * menjadi Lunas atau Kedaluwarsa, jadi saat batas lewat ia harus ditutup.
+     */
+    public function test_percobaan_gagal_lalu_batas_lewat_menjadi_kedaluwarsa(): void
+    {
+        ['pesanan' => $pesanan] = $this->pesanan();
+        $pembayaran = $this->tagihan($pesanan, 'gagal');
+
+        $this->jalankan();
+
+        $this->assertSame('kedaluwarsa', $pembayaran->refresh()->status);
+        $this->assertSame('dibatalkan', $pesanan->refresh()->status);
+        $this->assertSame('Batas pembayaran 24 jam terlewat', $pesanan->alasan_pembatalan);
     }
 
     /** Skenario #7: pembayaran yang sudah Lunas tidak boleh dibatalkan. */
