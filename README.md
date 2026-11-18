@@ -20,7 +20,7 @@ Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS 
 | Produk (admin) | FR-PROD | ✅ sisi admin: produk + gambar, varian (SKU/harga/berat/MOQ), kategori. Penegakan MOQ saat tambah ke keranjang sudah berjalan di FR-CART-01 |
 | Katalog produk | FR-KTLG | ✅ semua skenario: daftar produk (FR-KTLG-01), detail produk (FR-KTLG-02), filter kategori/jenis + pencarian + urut harga + reset filter (FR-KTLG-03) |
 | Keranjang & checkout | FR-CART, FR-CKOT | 🔄 berjalan: FR-CART-01 kelola keranjang, FR-CART-02 ringkasan (subtotal, label "Stok tidak mencukupi"/"Produk tidak tersedia", `bisa_checkout`), FR-CKOT-04 kurir + alamat asal toko, FR-CKOT-01 checkout (`GET /checkout`, `POST /checkout/ongkir`, `POST /checkout`: reservasi stok, pesanan Menunggu Pembayaran/Menunggu Validasi, salinan alamat). Sisi custom masih dummy (`design_id` diterima tanpa aturan "hanya dari preview") sampai FR-CDSN-04 |
-| Pesanan & pembayaran | FR-ORDR, FR-PAYM | ⏳ pesanan sudah dibentuk lewat FR-CKOT-01 (status, salinan alamat, reservasi stok); daftar/detail pesanan, pembayaran Midtrans, dan pembatalan belum ada |
+| Pesanan & pembayaran | FR-ORDR, FR-PAYM | 🔄 berjalan: pesanan sudah dibentuk lewat FR-CKOT-01 (status, salinan alamat, reservasi stok). FR-PAYM-01 #1 berjalan — `POST /pesanan/{nomor}/pembayaran` membuat transaksi Snap Midtrans untuk pesanan produk jadi. Belum ada: notifikasi pembayaran (#2/#3/#4), "Cek Status Pembayaran" (#5), FR-PAYM-02, dan seluruh FR-ORDR |
 | Desain kustom 2D | FR-CDSN | ⏳ belum dibangun: FR-CDSN-01 sampai FR-CDSN-07 belum ada. Yang sudah ada hanya kolom `products.sla_hari` dan `order_items.sla_hari` yang dibaca checkout (FR-CDSN-06), sedangkan endpoint untuk mengisi SLA (FR-CDSN-07), template, editor, unggah, preview, dan validasi desain belum ada |
 | Rantai pasok (SCM) | FR-SCM | ⏳ |
 | Profil & alamat | FR-PROF | ✅ semua skenario FR-PROF-01: lihat/ubah profil, ganti email, ubah password, cari lokasi, kelola alamat + alamat utama. Di luar skenario itu, `srs.md:378` meminta sistem menolak hapus alamat yang dipakai pesanan berjalan; aturan itu **belum dibangun** karena `AlamatController::hapus` baru memeriksa "minimal satu alamat tersisa", padahal pesanan sudah bisa dibentuk sejak FR-CKOT-01 |
@@ -57,6 +57,8 @@ app/
 │   │       ├── CheckoutController.php   # FR-CKOT-01: ringkasan, ongkir, buat pesanan
 │   │       ├── KurirController.php      # aktif/nonaktif layanan kurir (FR-CKOT-04)
 │   │       └── PengaturanPengirimanController.php  # alamat asal toko (FR-CKOT-04)
+│   │   └── Pembayaran/
+│   │       └── PembayaranController.php # FR-PAYM-01 #1: transaksi Snap Midtrans
 │   └── Middleware/
 │       └── Auth/
 │           ├── EnsureUserHasRole.php    # pembatasan akses per role (FR-AUTH-01 #7)
@@ -66,6 +68,7 @@ app/
 │   │   ├── KeranjangBerubah.php         # item bermasalah saat pesanan dibentuk (#7)
 │   │   └── OngkirTidakTersedia.php      # ongkir gagal dihitung (#8)
 │   └── Profil/RajaOngkirException.php   # kegagalan layanan pencarian lokasi dan tarif
+│   └── Pembayaran/MidtransException.php # payment gateway gagal (SI-01)
 ├── Mail/
 │   └── Auth/
 │       ├── VerifyEmailMail.php          # email verifikasi bertoken
@@ -82,6 +85,8 @@ app/
 │   └── Profil/
 │       ├── LokasiDitawarkan.php         # ingatan hasil pencarian lokasi (24 jam)
 │       └── RajaOngkir.php               # client RajaOngkir: pencarian lokasi + tarif
+│   └── Pembayaran/
+│       └── Midtrans.php                 # client Midtrans: Snap + cek status (SI-01)
 └── Models/
     ├── Auth/
     │   └── User.php                     # model modul auth (27 model total sesuai skema SRS)
@@ -99,6 +104,10 @@ database/migrations/                     # 31 migrasi (tetap flat)
 routes/auth.php                          # login, registrasi, verifikasi, reset password
 routes/profil.php                        # profil, ganti email, pencarian lokasi
 routes/produk.php                        # kelola kategori, produk, dan varian (FR-PROD-01/02/03)
+routes/katalog.php                       # katalog, detail, filter (FR-KTLG-01/02/03)
+routes/keranjang.php                     # keranjang belanja (FR-CART-01/02)
+routes/checkout.php                      # ringkasan, ongkir, buat pesanan (FR-CKOT-01/04)
+routes/pembayaran.php                    # transaksi Snap Midtrans (FR-PAYM-01 #1)
 routes/web.php                           # halaman utama
 lang/id/validation.php                   # seluruh pesan validasi Bahasa Indonesia + pesan yang ditetapkan dokumen
 tests/Feature/                           # pengujian perilaku per kebutuhan
@@ -190,7 +199,7 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **399 test lulus, 1457 assertion** (dijalankan lokal di branch ini dan otomatis di CI).
+Status terakhir: **420 test lulus, 1522 assertion** (dijalankan lokal dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
@@ -249,6 +258,7 @@ Semua route dipisah per modul di `routes/*.php` dan memakai session guard. Respo
 | GET | `/checkout?item_ids[]=` | `checkout.tampil` | `auth`, `active` | FR-CKOT-01 #2/#3/#6 + FR-CART-01 #4/#5 - ringkasan sebelum pesanan dibentuk: `items`, `subtotal_barang`, `berat_total`, `alamat.dipilih` (alamat utama **hanya** bila lokasinya terisi) + `alamat.daftar` (`bisa_dipakai`, `catatan` "Lengkapi lokasi"), `kurir` aktif saja, `sla_hari` + `estimasi_sla`. `422` "Pilih minimal satu item untuk di-checkout" / "Produk jadi dan produk custom di-checkout terpisah, selesaikan salah satunya terlebih dahulu"; `404` "Item keranjang tidak ditemukan" |
 | POST | `/checkout/ongkir` | `checkout.ongkir` | `auth`, `active`, throttle 10/menit | FR-CKOT-01 #3/#8 - `item_ids[]`, `address_id`, `courier_id` → `subtotal_barang`, `berat_total`, `ongkir`, `total`. Gangguan RajaOngkir diulang sekali, lalu `422` "Alamat dan kurir wajib dipilih" (termasuk alamat tanpa lokasi, kurir nonaktif, atau alamat User lain) / "Ongkir belum dapat dihitung, silakan coba lagi". `Cache-Control: no-store` |
 | POST | `/checkout` | `checkout.buat` | `auth`, `active`, throttle 6/menit | FR-CKOT-01 #1/#4/#5/#7 - buat pesanan: status `menunggu_pembayaran` (jadi, `kadaluwarsa_pada` +24 jam) atau `menunggu_validasi` (custom), `status_pembayaran` "belum_dibayar", `status_desain` "tidak_ada"/"menunggu_validasi", salinan alamat, Stok Direservasi naik, item terpilih keluar dari keranjang. `ongkir` dan `total` dari body diabaikan. `422` "Keranjang berubah, periksa kembali item Anda" + `data.items[].label`. `Cache-Control: no-store` |
+| POST | `/pesanan/{nomor}/pembayaran` | `pembayaran.buat` | `auth`, `active`, throttle 10/menit | FR-PAYM-01 #1, UC-31 - buat transaksi Snap untuk pesanan produk jadi berstatus `menunggu_pembayaran`: `data.nomor_pesanan`, `snap_token`, `redirect_url` (hanya saat transaksi baru), `jumlah`, `kadaluwarsa_pada`. Nominal diambil dari `orders.total`. Membuka ulang memakai token yang masih aktif (`200`), percobaan baru setelah `gagal` membuat baris baru (`201`). `422` "Pesanan ini sudah dibayar" / "Pesanan ini tidak dapat dibayar" / "Pembayaran hanya dapat dilakukan setelah desain disetujui" / "Batas pembayaran pesanan sudah lewat" / "Pembayaran belum dapat diproses, silakan coba lagi"; `404` "Pesanan tidak ditemukan". `Cache-Control: no-store` |
 | GET | `/admin/kurir` | `kurir.index` | `auth`, `active`, `role:admin_ecommerce` | FR-CKOT-04 #2/#3 - daftar **semua** layanan kurir (`kode`, `nama`, `layanan`, `is_aktif`), termasuk yang nonaktif. Tidak ada route tambah: barisnya hasil `php artisan rajaongkir:sinkron-layanan` |
 | PUT | `/admin/kurir/{id}/aktif` | `kurir.aktif` | `auth`, `active`, `role:admin_ecommerce` | FR-CKOT-04 #2 - aktifkan layanan; `404` "Kurir tidak ditemukan" |
 | PUT | `/admin/kurir/{id}/nonaktif` | `kurir.nonaktif` | `auth`, `active`, `role:admin_ecommerce` | FR-CKOT-04 #3/#4 - nonaktifkan layanan; `422` "Minimal satu layanan kurir harus aktif" bila itu yang terakhir |
@@ -359,6 +369,12 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **`expiry` Midtrans mengikuti `orders.kadaluwarsa_pada`**: `start_time` dikirim dalam WIB (`+0700`, NFR-LOC-01) dan `duration` adalah sisa menit sampai batas bayar, sehingga gateway dan scheduler (FR-SYS-01 #1) kedaluwarsa pada saat yang sama. Bila batas itu sudah lewat, transaksi tidak dibuat sama sekali — tidak ada gunanya membuat transaksi yang lahir dalam keadaan kedaluwarsa.
 - **`item_details` tidak dikirim ke Snap**: Midtrans menolak transaksi bila jumlah `item_details` tidak sama dengan `gross_amount`, sedangkan pesanan sudah punya `diskon_voucher` dan `ongkir` yang tidak dipecah per item. Yang dikirim hanya `transaction_details` (nomor pesanan + total) dan `customer_details`; totalnya tetap diambil dari `orders.total`, bukan dari browser.
 - **`gross_amount` dari Midtrans diperiksa sebelum menjadi uang**: bentuk `"48000.00"` diterima, selain bilangan bulat rupiah ditolak (`MidtransException`). Angka dari pihak ketiga tidak boleh langsung masuk ke perbandingan nominal pesanan.
+- **Baris `payments` lahir setelah Midtrans menjawab**: checkout tidak membuat baris (lihat butir `status_pembayaran`), dan controller pembayaran juga tidak membuatnya sebelum token diterima. Kalau Snap gagal, jawabannya `422` tanpa baris setengah jadi. Notifikasi nanti mencocokkan pesanan lewat `nomor_pesanan`, satu-satunya kunci yang dikirim ke Midtrans.
+- **Membuka halaman pembayaran dua kali memakai token yang sama**: baris `belum_dibayar` yang masih punya `snap_token` dipakai ulang (`200`), sehingga Midtrans tidak menerima dua transaksi untuk satu pesanan. `redirect_url` hanya dikirim saat baris baru dibuat karena kolomnya tidak disimpan; pemanggilan ulang cukup memakai `snap_token` lewat Snap.js. Percobaan setelah `gagal` membuat baris baru, sesuai skenario #3 ("mencoba ulang metode lain").
+- **Pesan penolakan pembayaran adalah pilihan implementasi**: skenario #1 hanya menetapkan keadaan ("pesanan produk jadi berstatus Menunggu Pembayaran") tanpa kalimat baku, jadi lima pesan di tabel endpoint dipilih sendiri dan tidak menambah keadaan yang tidak ada di dokumen.
+- **Batas 24 jam diperiksa di controller, bukan hanya di Midtrans**: pesanan yang `kadaluwarsa_pada`-nya sudah lewat dijawab `422` sebelum HTTP dikirim, walaupun scheduler FR-SYS-01 #1 belum ada. Tanpa ini, User bisa membayar pesanan yang seharusnya sudah dibatalkan.
+- **Pesanan custom ditolak sampai desain disetujui (FR-PAYM-02)**: status `menunggu_validasi` dan `menunggu_revisi_desain` dijawab `422` dengan pesan yang menunjuk persetujuan desain. Pembayaran custom baru dibuka setelah FR-CDSN-05 #2 berjalan.
+- **`POST /pesanan/{nomor}/pembayaran` dibatasi 10/menit**: tiap permintaan baru bisa membuat transaksi di Midtrans (membuka ulang tidak, karena token dipakai ulang), sehingga percobaan yang terus gagal tidak boleh membanjiri gateway.
 
 ## Aturan proyek yang tidak boleh dilanggar
 
