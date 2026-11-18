@@ -13,4 +13,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/pesanan/{nomor}/pembayaran', [PembayaranController::class, 'buat'])
         ->middleware('throttle:10,1,pembayaran-buat')
         ->name('pembayaran.buat');
+
+    // FR-PAYM-01 #5, UC-33: tiap pemeriksaan memanggil gateway, jadi dibatasi.
+    Route::post('/pesanan/{nomor}/pembayaran/cek', [PembayaranController::class, 'cek'])
+        ->middleware('throttle:6,1,pembayaran-cek')
+        ->name('pembayaran.cek');
 });
