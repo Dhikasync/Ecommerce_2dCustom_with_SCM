@@ -21,6 +21,9 @@ class SinkronPembayaran
     /** Status Midtrans yang berarti percobaan ini gagal, pesanan masih boleh dibayar. */
     private const GAGAL = ['deny', 'cancel', 'failure'];
 
+    /** Catatan riwayat untuk jalur gateway; scheduler punya catatannya sendiri. */
+    public const CATATAN_GATEWAY = 'Disinkronkan dari status payment gateway (FR-PAYM-01 #5)';
+
     /**
      * @param  array{order_id: string, transaction_id: ?string, metode: ?string, jumlah: int, transaction_status: string, fraud_status: ?string}  $status
      * @return array{status_pembayaran: string, diterapkan: bool} `diterapkan` false
@@ -119,13 +122,42 @@ class SinkronPembayaran
     private function kedaluwarsa(Order $pesanan, Payment $pembayaran, array $transaksi): string
     {
         $pembayaran->update([...$transaksi, 'status' => 'kedaluwarsa']);
-
-        if ($pesanan->status === 'menunggu_pembayaran') {
-            $this->ubahStatus($pesanan, 'dibatalkan');
-            $this->lepasReservasi($pesanan);
-        }
+        $this->batalkanKarenaKedaluwarsa($pesanan, self::CATATAN_GATEWAY);
 
         return 'kedaluwarsa';
+    }
+
+    /**
+     * FR-SYS-01 #1/#7, FR-PAYM-01 #4, FR-PAYM-02 #3: scheduler membatalkan
+     * pesanan yang melewati batas bayar. Memakai efek yang sama dengan `expire`
+     * dari gateway, hanya pemicunya waktu, bukan notifikasi.
+     *
+     * @return bool true bila pesanan ini benar-benar dibatalkan sekarang
+     */
+    public function kedaluwarsakan(Order $pesanan, string $catatan): bool
+    {
+        return DB::transaction(function () use ($pesanan, $catatan) {
+            // Skenario #7: baca ulang di bawah kunci, karena User bisa saja baru
+            // membayar setelah daftar kandidat dibaca scheduler.
+            $segar = Order::whereKey($pesanan->id)->lockForUpdate()->first();
+
+            if (! $segar || $segar->status !== 'menunggu_pembayaran') {
+                return false;
+            }
+
+            if ($segar->kadaluwarsa_pada === null || $segar->kadaluwarsa_pada->isFuture()) {
+                return false;
+            }
+
+            if ($segar->payments()->where('status', 'lunas')->exists()) {
+                return false;
+            }
+
+            $segar->payments()->where('status', 'belum_dibayar')->update(['status' => 'kedaluwarsa']);
+            $this->batalkanKarenaKedaluwarsa($segar, $catatan);
+
+            return true;
+        });
     }
 
     /** Skema Lampiran A: Stok Fisik dan Stok Direservasi sama-sama turun. */
@@ -164,7 +196,18 @@ class SinkronPembayaran
             ->all();
     }
 
-    private function ubahStatus(Order $pesanan, string $baru): void
+    /** Pesanan berhenti di sini: reservasi dikembalikan, Stok Fisik tidak disentuh. */
+    private function batalkanKarenaKedaluwarsa(Order $pesanan, string $catatan): void
+    {
+        if ($pesanan->status !== 'menunggu_pembayaran') {
+            return;
+        }
+
+        $this->ubahStatus($pesanan, 'dibatalkan', $catatan);
+        $this->lepasReservasi($pesanan);
+    }
+
+    private function ubahStatus(Order $pesanan, string $baru, string $catatan = self::CATATAN_GATEWAY): void
     {
         // FR-ORDR-01 #2: perubahan status sistem tetap masuk riwayat, dengan
         // `diubah_oleh` kosong karena bukan tindakan Admin maupun User.
@@ -173,7 +216,7 @@ class SinkronPembayaran
             'status_lama' => $pesanan->status,
             'status_baru' => $baru,
             'diubah_oleh' => null,
-            'catatan' => 'Disinkronkan dari status payment gateway (FR-PAYM-01 #5)',
+            'catatan' => $catatan,
         ]);
 
         $pesanan->update(['status' => $baru]);
