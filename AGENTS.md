@@ -5,7 +5,7 @@ integration and 2D custom design. Laravel (PHP 8.5), PostgreSQL (nichibag_db).
 
 ## Source of truth
 
-- SRS v1.0 and User Story v1.1.4 are the only source of truth. They live in
+- SRS v1.1 and User Story v1.1.4 are the only source of truth. They live in
   the `nichibag-docs` skill (`references/srs.md`, `references/user-story.md`).
   Read them first.
 - Never invent a table, field, status, or rule from examples or other
