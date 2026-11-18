@@ -114,10 +114,10 @@ class PembayaranController extends Controller
             return $this->jawabSinkron($pesanan, $pembayaran);
         }
 
-        if ($pesanan->status !== 'menunggu_pembayaran') {
-            return response()->json(['message' => 'Pesanan ini tidak dapat dibayar'], 422);
-        }
-
+        // FR-PAYM-01 #5: notifikasi gateway yang tertunda bisa datang setelah
+        // scheduler membatalkan pesanan. Baris `payments` menandakan percobaan
+        // nyata pernah dibuat, jadi keadaan lokal tetap harus disamakan dengan
+        // gateway — inilah jalur pemulihan untuk uang yang sudah masuk.
         if (! $pembayaran) {
             return response()->json([
                 'message' => 'Pembayaran untuk pesanan ini belum dibuat',

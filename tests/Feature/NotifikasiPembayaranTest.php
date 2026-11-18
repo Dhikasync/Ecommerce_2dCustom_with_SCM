@@ -165,6 +165,40 @@ class NotifikasiPembayaranTest extends TestCase
         Mail::assertSent(PembayaranMail::class, 1);
     }
 
+    /**
+     * Uang bisa masuk setelah scheduler membatalkan pesanan. Pesanannya tetap
+     * batal (Lampiran B: Dibatalkan = status akhir), dan kabar tidak boleh
+     * mengklaim pesanan sedang diproses.
+     */
+    public function test_settlement_setelah_dibatalkan_tetap_batal_dan_pesannya_jujur(): void
+    {
+        ['pesanan' => $pesanan, 'pembayaran' => $pembayaran, 'varian' => $varian] = $this->pesanan([
+            'kadaluwarsa_pada' => now()->subMinute(),
+        ]);
+
+        // Scheduler membatalkan lebih dulu; notifikasi gateway menyusul terlambat.
+        $this->artisan('orders:kedaluwarsa')->assertSuccessful();
+        $this->assertSame('dibatalkan', $pesanan->refresh()->status);
+
+        $this->kirim()
+            ->assertOk()
+            ->assertJsonPath('data.status_pembayaran', 'lunas')
+            ->assertJsonPath('data.status_pesanan', 'dibatalkan');
+
+        $this->assertSame('lunas', $pembayaran->refresh()->status);
+        $this->assertSame('dibatalkan', $pesanan->refresh()->status);
+
+        // Reservasi sudah dilepas scheduler; jangan dikurangi lagi.
+        $varian->refresh();
+        $this->assertSame(10, $varian->stok_fisik);
+        $this->assertSame(0, $varian->stok_direservasi);
+
+        $kabar = Notification::where('user_id', $this->user->id)->latest('id')->firstOrFail();
+        $this->assertSame('Pembayaran diterima', $kabar->judul);
+        $this->assertStringNotContainsString('sedang diproses', $kabar->pesan);
+        $this->assertStringContainsString('sudah dibatalkan', $kabar->pesan);
+    }
+
     /** FR-SYS-01 #7: notifikasi yang sama tidak diterapkan dua kali. */
     public function test_notifikasi_ganda_diproses_sekali(): void
     {

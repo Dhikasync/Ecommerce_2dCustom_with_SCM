@@ -245,6 +245,8 @@ class CekStatusPembayaranTest extends TestCase
 
         $this->assertSame('kedaluwarsa', $pembayaran->refresh()->status);
         $this->assertSame('dibatalkan', $pesanan->refresh()->status);
+        // FR-ORDR-01 #4: alasan pembatalan terbaca di detail pesanan.
+        $this->assertSame('Pembayaran kedaluwarsa di payment gateway', $pesanan->alasan_pembatalan);
 
         // Stok Fisik tidak berubah, hanya reservasinya yang dilepas.
         $varian->refresh();
@@ -303,14 +305,42 @@ class CekStatusPembayaranTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_pesanan_yang_sudah_dibatalkan_tidak_dapat_diperiksa(): void
+    /**
+     * FR-PAYM-01 #5: pesanan bisa sudah dibatalkan scheduler sebelum notifikasi
+     * gateway yang tertunda sampai. Selama percobaan bayar pernah dibuat, User
+     * tetap harus bisa menyamakan keadaan lokal dengan gateway.
+     */
+    public function test_pesanan_dibatalkan_bertagihan_tetap_dapat_diperiksa(): void
     {
-        $this->pesanan(['status' => 'dibatalkan']);
+        ['pesanan' => $pesanan, 'pembayaran' => $pembayaran, 'varian' => $varian] = $this->pesanan([
+            'status' => 'dibatalkan',
+            'alasan_pembatalan' => 'Batas pembayaran 24 jam terlewat',
+        ]);
+        $this->palsukanStatus(['transaction_status' => 'settlement']);
+
+        $this->cek()
+            ->assertOk()
+            ->assertJsonPath('data.status_pembayaran', 'lunas')
+            ->assertJsonPath('data.status_pesanan', 'dibatalkan');
+
+        $this->assertSame('lunas', $pembayaran->refresh()->status);
+        $this->assertSame('dibatalkan', $pesanan->refresh()->status);
+
+        // Lampiran B: Dibatalkan adalah status akhir, jadi stok tidak dikurangi lagi.
+        $varian->refresh();
+        $this->assertSame(10, $varian->stok_fisik);
+        $this->assertSame(2, $varian->stok_direservasi);
+    }
+
+    public function test_pesanan_dibatalkan_tanpa_tagihan_tidak_dapat_diperiksa(): void
+    {
+        ['pembayaran' => $pembayaran] = $this->pesanan(['status' => 'dibatalkan']);
+        $pembayaran->delete();
         Http::fake();
 
         $this->cek()
             ->assertStatus(422)
-            ->assertJsonPath('message', 'Pesanan ini tidak dapat dibayar');
+            ->assertJsonPath('message', 'Pembayaran untuk pesanan ini belum dibuat');
 
         Http::assertNothingSent();
     }
