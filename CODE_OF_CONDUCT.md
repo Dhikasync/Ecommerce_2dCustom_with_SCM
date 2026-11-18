@@ -3,11 +3,8 @@
 > **Ringkasan Inggris** — Code of Conduct for the Nichibag marketplace project,
 > adapted from Contributor Covenant 2.1. Be respectful, keep criticism about
 > code and not people, and never publish someone's private information. Report
-> unacceptable behaviour to **GANTI_EMAIL_KEAMANAN**; reports are handled
+> unacceptable behaviour to **andhikapratama1510@gmail.com**; reports are handled
 > privately.
-
-> **Catatan untuk pemelihara:** ganti `GANTI_EMAIL_KEAMANAN` dengan alamat email
-> asli sebelum PR di-merge, sama dengan yang dipakai di `SECURITY.md`.
 
 ## Komitmen kami
 
@@ -55,7 +52,7 @@ media sosial atau forum.
 
 ## Pelaporan
 
-Kirim laporan ke **GANTI_EMAIL_KEAMANAN** dengan subjek
+Kirim laporan ke **andhikapratama1510@gmail.com** dengan subjek
 `[KODE ETIK] <ringkasan>`. Sertakan tautan atau tangkapan layar bila ada.
 Semua laporan ditinjau dan privasi pelapor dijaga; identitas pelapor tidak
 dibuka tanpa izin.

@@ -1,14 +1,10 @@
 # Kebijakan Keamanan
 
 > **Ringkasan Inggris** — Security policy for the Nichibag marketplace. Please
-> report vulnerabilities privately to **GANTI_EMAIL_KEAMANAN**, never in a
+> report vulnerabilities privately to **andhikapratama1510@gmail.com**, never in a
 > public issue. Do not test against real user data, and do not run denial of
 > service or mail-spam tests. This document describes what counts as a
 > vulnerability, what does not, and how a report is handled.
-
-> **Catatan untuk pemelihara:** ganti `GANTI_EMAIL_KEAMANAN` di berkas ini dan di
-> `CODE_OF_CONDUCT.md` dengan alamat email asli sebelum PR di-merge. Placeholder
-> ini sengaja ditulis dengan huruf kapital semua supaya tidak lolos tanpa sengaja.
 
 ## Versi yang didukung
 
@@ -22,7 +18,7 @@ Perbaikan keamanan hanya diberikan untuk `main`.
 
 ## Cara melapor
 
-Kirim email ke **GANTI_EMAIL_KEAMANAN** dengan subjek
+Kirim email ke **andhikapratama1510@gmail.com** dengan subjek
 `[KEAMANAN] <ringkasan singkat>`. Jangan membuka issue publik, jangan menulis
 detail teknis di diskusi, dan jangan mengirim proof-of-concept ke kanal umum —
 laporan yang terbuka sebelum diperbaiki membahayakan pengguna.
