@@ -25,7 +25,7 @@ Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS 
 | Rantai pasok (SCM) | FR-SCM | ⏳ |
 | Profil & alamat | FR-PROF | ✅ semua skenario FR-PROF-01: lihat/ubah profil, ganti email, ubah password, cari lokasi, kelola alamat + alamat utama. Di luar skenario itu, `srs.md:378` meminta sistem menolak hapus alamat yang dipakai pesanan berjalan; aturan itu **belum dibangun** karena `AlamatController::hapus` baru memeriksa "minimal satu alamat tersisa", padahal pesanan sudah bisa dibentuk sejak FR-CKOT-01 |
 | Dashboard admin | FR-DASH | ⏳ ditunda sampai UI dimulai |
-| Proses otomatis berbasis waktu | FR-SYS-01 | ⏳ belum dibangun: belum ada scheduler maupun perintah terjadwal, jadi tiga skenario WAJIB-nya (#1 pembayaran kedaluwarsa, #2 masa revisi desain berakhir, #7 proses tidak diterapkan ganda) belum berjalan. Akibat yang paling terasa: reservasi stok pesanan kedaluwarsa belum dirilis otomatis — utang yang sama dengan butir "Reservasi yang kedaluwarsa belum dirilis otomatis" di bawah |
+| Proses otomatis berbasis waktu | FR-SYS-01 | 🔄 berjalan: #1 (pembayaran kedaluwarsa) lewat `php artisan orders:kedaluwarsa`, dijadwalkan tiap menit — pesanan yang lewat 24 jam dibatalkan, Stok Direservasi dilepas, pembayaran `belum_dibayar` menjadi `kedaluwarsa`, riwayat status ditulis, dan User diberi kabar email + in-app. #7 (proses tidak diterapkan ganda) dijaga dengan membaca ulang status di bawah kunci. Belum ada: #2 (masa revisi desain), #3–#6, #8 karena bergantung modul CDSN/ORDR/SCM |
 
 Catatan jujur: login Admin sudah berjalan, tetapi **dashboard belum ada**; sementara Admin diarahkan ke halaman utama sesuai `user-story.md:19`. Pada FR-PROF, seluruh skenario FR-PROF-01 sudah berjalan, tetapi satu reaksi sistem di `srs.md:378` — menolak hapus alamat yang dipakai pesanan berjalan — belum dibangun; lihat baris FR-PROF.
 
@@ -79,7 +79,8 @@ app/
 │   └── Pesanan/
 │       └── PembayaranMail.php           # kabar Lunas/kedaluwarsa (FR-PAYM-01 #2/#4)
 ├── Console/Commands/
-│   └── SinkronLayananKurir.php          # isi layanan kurir dari RajaOngkir (FR-CKOT-04)
+│   ├── SinkronLayananKurir.php          # isi layanan kurir dari RajaOngkir (FR-CKOT-04)
+│   └── BatalkanPesananKedaluwarsa.php   # sapu pesanan lewat batas bayar (FR-SYS-01 #1)
 ├── Rules/NomorTelepon.php               # format nomor telepon +62 (dipakai auth + profil)
 ├── Support/
 │   ├── GambarPublik.php                 # URL gambar dari disk publik
@@ -115,6 +116,7 @@ routes/keranjang.php                     # keranjang belanja (FR-CART-01/02)
 routes/checkout.php                      # ringkasan, ongkir, buat pesanan (FR-CKOT-01/04)
 routes/pembayaran.php                    # transaksi Snap + cek status (FR-PAYM-01 #1/#5)
 routes/notifikasi-pembayaran.php         # webhook gateway, di luar grup `web` (FR-PAYM-01 #2/#3/#4)
+routes/console.php                       # jadwal `orders:kedaluwarsa` tiap menit (FR-SYS-01 #1)
 routes/web.php                           # halaman utama
 lang/id/validation.php                   # seluruh pesan validasi Bahasa Indonesia + pesan yang ditetapkan dokumen
 tests/Feature/                           # pengujian perilaku per kebutuhan
@@ -185,6 +187,28 @@ Kuota RajaOngkir dihitung **per panggilan HTTP**, bukan per endpoint: pencarian 
 batasi `--kurir` ke kurir yang dipakai, dan jangan jalankan sinkronisasi berulang tanpa
 alasan — hasilnya idempoten di database, tetapi tetap memotong kuota.
 
+### Scheduler pembatalan otomatis (FR-SYS-01 #1)
+
+Pesanan berstatus **Menunggu Pembayaran** yang melewati `kadaluwarsa_pada` dibatalkan
+oleh perintah terjadwal. Di server, jalankan cron Laravel sekali — `* * * * * cd /path/aplikasi && php artisan schedule:run` — karena jadwalnya didefinisikan di
+`routes/console.php`, bukan di crontab.
+
+```bash
+# Menjalankan pemeriksaan sekali secara manual (juga dipakai test).
+php artisan orders:kedaluwarsa
+# 2 pesanan dibatalkan karena batas pembayaran lewat.
+
+# Melihat jadwal yang terdaftar.
+php artisan schedule:list
+```
+
+Efek satu pesanan: status pesanan `dibatalkan`, baris `payments` yang masih
+`belum_dibayar` menjadi `kedaluwarsa`, Stok Direservasi dilepas (Stok Fisik tidak
+disentuh), satu baris riwayat status dengan `diubah_oleh` kosong, dan notifikasi
+email + in-app. Pesanan yang sudah Lunas dan pesanan custom yang masih
+Menunggu Validasi tidak ikut tersapu.
+
+
 Di Windows, `php.ini` sering tidak punya CA bundle sehingga panggilan nyata gagal dengan
 `cURL error 60: SSL certificate ... unable to get local issuer certificate`. Perbaikannya
 di luar repo:
@@ -206,7 +230,7 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **449 test lulus, 1656 assertion** (dijalankan lokal dan otomatis di CI).
+Status terakhir: **458 test lulus, 1704 assertion** (dijalankan lokal dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
@@ -363,7 +387,7 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Gangguan RajaOngkir diulang satu kali**: hanya gangguan koneksi dan balasan `5xx`, dengan jeda 200 ms. `4xx` tidak diulang karena kunci salah atau permintaan cacat tidak akan sembuh dengan pengulangan. Pengulangan ini tidak mengubah kontrak: kalau tetap gagal, jawabannya `422` "Ongkir belum dapat dihitung, silakan coba lagi" seperti skenario #8, dan pesanan tetap tidak dibuat (`srs.md:521`).
 - **`cost` dari RajaOngkir diperiksa sebelum menjadi uang**: harus bilangan bulat positif. Nilai `0` atau negatif ditolak dan alurnya jatuh ke pesan #8, karena `srs.md:520` melarang ongkir "diam-diam menjadi Rp 0" — dan nilai negatif akan menurunkan total pesanan.
 - **`Cache-Control: no-store` pada tiga respons checkout**: bukan aturan dokumen. Respons memuat alamat lengkap dan nomor telepon, jadi tidak boleh tinggal di cache browser atau proksi bersama.
-- **Reservasi yang kedaluwarsa belum dirilis otomatis** (utang tercatat): `orders.kadaluwarsa_pada` sudah ditulis, tetapi belum ada perintah terjadwal yang membatalkan pesanan dan mengembalikan `stok_direservasi`. Sampai itu ada, stok yang sudah direservasi hanya kembali lewat admin. Aturannya sudah ada di Lampiran A ("Kedaluwarsa menjadi Dibatalkan"), jadi ini pekerjaan yang belum dikerjakan, bukan aturan baru.
+- **Reservasi yang kedaluwarsa kini dirilis otomatis (FR-SYS-01 #1)**: `orders.kadaluwarsa_pada` sebelumnya hanya ditulis tanpa ada yang menegakkan, sehingga `stok_direservasi` menggantung dan hanya bisa dikembalikan lewat Admin. Sekarang `php artisan orders:kedaluwarsa` (dijadwalkan tiap menit) membatalkan pesanan, melepas reservasi, menandai `payments` yang masih `belum_dibayar` menjadi `kedaluwarsa`, menulis riwayat status, dan mengirim kabar. Pesanan `menunggu_validasi` tidak ikut tersapu karena batasnya adalah masa revisi desain (FR-SYS-01 #2, belum dibangun).
 - **Rute contoh sinkronisasi ditentukan `--tujuan`, bukan asal = tujuan**: `service` hanya keluar per rute, dan rute dalam satu kecamatan hanya memberi `CTC`/`JTR*`, bukan `REG`/`YES`. Tanpa `--tujuan` perintah tetap berjalan (perilaku lama) tetapi memberi peringatan, supaya alasan hasilnya tidak mewakili layanan antar kota terlihat langsung, bukan baru ketahuan setelah tabel terisi.
 - **`filter=lowest` tidak dikirim ke RajaOngkir**: parameter itu sudah dicoba pada rute nyata dan diabaikan — tujuh layanan tetap dikembalikan. Membiarkannya di kode membuat pembaca mengira daftar tarif sudah disaring, padahal penyaringan yang benar dilakukan dengan `firstWhere('layanan', ...)` di `biayaOngkir()`. Yang disimpan tetap apa adanya dari API, sesuai `srs.md:809`.
 - **Daftar kurir dan layanan berasal dari RajaOngkir, bukan daftar tulisan tangan (FR-CKOT-04 #2)**: `srs.md:228` dan `:289` menyatakan layanan kurir yang didukung datang dari API Kurir, dan `srs.md:809` melarang membangun komponen tarif sendiri. Karena RajaOngkir tidak punya endpoint "daftar layanan" — `service` seperti `REG`/`YES`/`OKE` hanya keluar dari `POST /calculate/domestic-cost` untuk satu rute tertentu — daftar diisi perintah `php artisan rajaongkir:sinkron-layanan`, bukan seeder. Yang tetap statis hanya **kode** kurir (17 kode dari dokumentasi RajaOngkir) karena itu memang kontrak, bukan hasil panggilan. Dokumen tetap tidak punya skenario menambah layanan dari aplikasi, jadi tidak ada route tambah; baris baru lahir `is_aktif = false` dan `is_aktif` baris lama tidak disentuh supaya sinkronisasi ulang tidak menghidupkan layanan yang sudah dimatikan Admin.
@@ -381,12 +405,12 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Baris `payments` lahir setelah Midtrans menjawab**: checkout tidak membuat baris (lihat butir `status_pembayaran`), dan controller pembayaran juga tidak membuatnya sebelum token diterima. Kalau Snap gagal, jawabannya `422` tanpa baris setengah jadi. Notifikasi nanti mencocokkan pesanan lewat `nomor_pesanan`, satu-satunya kunci yang dikirim ke Midtrans.
 - **Membuka halaman pembayaran dua kali memakai token yang sama**: baris `belum_dibayar` yang masih punya `snap_token` dipakai ulang (`200`), sehingga Midtrans tidak menerima dua transaksi untuk satu pesanan. `redirect_url` hanya dikirim saat baris baru dibuat karena kolomnya tidak disimpan; pemanggilan ulang cukup memakai `snap_token` lewat Snap.js. Percobaan setelah `gagal` membuat baris baru, sesuai skenario #3 ("mencoba ulang metode lain").
 - **Pesan penolakan pembayaran adalah pilihan implementasi**: skenario #1 hanya menetapkan keadaan ("pesanan produk jadi berstatus Menunggu Pembayaran") tanpa kalimat baku, jadi lima pesan di tabel endpoint dipilih sendiri dan tidak menambah keadaan yang tidak ada di dokumen.
-- **Batas 24 jam diperiksa di controller, bukan hanya di Midtrans**: pesanan yang `kadaluwarsa_pada`-nya sudah lewat dijawab `422` sebelum HTTP dikirim, walaupun scheduler FR-SYS-01 #1 belum ada. Tanpa ini, User bisa membayar pesanan yang seharusnya sudah dibatalkan.
+- **Batas 24 jam diperiksa di controller, bukan hanya di Midtrans**: pesanan yang `kadaluwarsa_pada`-nya sudah lewat dijawab `422` sebelum HTTP dikirim, bukan hanya menunggu scheduler membatalkannya. Tanpa ini, User bisa membayar pesanan yang seharusnya sudah dibatalkan.
 - **Pesanan custom ditolak sampai desain disetujui (FR-PAYM-02)**: status `menunggu_validasi` dan `menunggu_revisi_desain` dijawab `422` dengan pesan yang menunjuk persetujuan desain. Pembayaran custom baru dibuka setelah FR-CDSN-05 #2 berjalan.
 - **`POST /pesanan/{nomor}/pembayaran` dibatasi 10/menit**: tiap permintaan baru bisa membuat transaksi di Midtrans (membuka ulang tidak, karena token dipakai ulang), sehingga percobaan yang terus gagal tidak boleh membanjiri gateway.
 - **Pemetaan status Midtrans hanya ada di satu tempat**: `App\Services\Pembayaran\SinkronPembayaran` menerjemahkan `transaction_status` menjadi keadaan lokal, dan tombol "Cek Status Pembayaran" (FR-PAYM-01 #5) serta webhook (#2/#3/#4) memakai kelas yang sama, supaya status pesanan tidak mungkin berbeda tergantung jalur mana yang lebih dulu sampai.
 - **`capture` dengan `fraud_status = challenge` belum dianggap lunas**: Midtrans belum menyatakan uangnya sah, jadi pembayaran tetap `belum_dibayar` dan stok belum turun. Hanya `settlement` atau `capture`+`accept` yang mengubah pesanan menjadi Diproses.
-- **`expire` dari gateway langsung membatalkan pesanan**: skenario #4 menetapkan efek itu untuk scheduler, tetapi tombol cek status adalah tempat pertama di mana kedaluwarsa benar-benar terdeteksi sebelum FR-SYS-01 #1 ada. Efeknya sama persis: pembayaran `kedaluwarsa`, pesanan `dibatalkan`, Stok Direservasi dilepas, Stok Fisik tidak disentuh.
+- **`expire` dari gateway langsung membatalkan pesanan**: skenario #4 menetapkan efek itu untuk scheduler, tetapi tombol cek status adalah tempat pertama di mana kedaluwarsa benar-benar terdeteksi. Sejak FR-SYS-01 #1 ada, `orders:kedaluwarsa` memakai efek pembatalan yang sama persis: pembayaran `kedaluwarsa`, pesanan `dibatalkan`, Stok Direservasi dilepas, Stok Fisik tidak disentuh.
 - **Pesanan yang sudah dibatalkan tidak dihidupkan lagi oleh notifikasi terlambat**: uang yang tetap masuk setelah pembatalan adalah urusan refund (FR-PAYM-04, OPSIONAL) dan belum dibangun; menandai pesanan batal sebagai Diproses akan membuat stok dan status tidak lagi bisa dipercaya.
 - **Cek status memeriksa `order_id` dan `gross_amount` sebelum mengubah apa pun**: jawaban gateway yang menyebut pesanan atau nominal lain dijawab `422` tanpa perubahan. Sama seperti butir `gross_amount` di atas, angka dari pihak ketiga tidak boleh langsung menjadi status pesanan.
 - **Pesanan tanpa baris `payments` dijawab `422`**: pesan "Pembayaran untuk pesanan ini belum dibuat" adalah pilihan implementasi, karena FR-PAYM-01 #5 tidak mengatur keadaan ini. Yang tidak dilakukan adalah membuat tagihan baru diam-diam saat User menekan "Cek Status Pembayaran".
@@ -397,6 +421,11 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Kegagalan SMTP tidak membatalkan status pembayaran**: pengiriman email dibungkus `try/catch` + `report()`. Status `lunas` dan pengurangan stok sudah sah dari gateway; menggagalkannya karena server email mati akan membuat Midtrans mengulang notifikasi yang sebenarnya sudah diproses.
 - **`transaction_id` dipakai mencocokkan baris `payments`, dengan cadangan baris terbaru**: satu pesanan boleh punya beberapa percobaan bayar (#3), dan notifikasi Midtrans menyebut `transaction_id`. Bila belum ada yang cocok (notifikasi pertama untuk percobaan terbaru), baris terbaru yang dipakai; kolomnya unik sehingga percobaan lain tidak bisa saling menimpa.
 - **Webhook dibatasi 60/menit**: cukup untuk percobaan bayar berulang dalam satu pesanan, tetapi tetap menahan kiriman bertubi-tubi ke URL yang terbuka tanpa login.
+- **Scheduler memakai efek kedaluwarsa yang sama dengan `expire` gateway**: `SinkronPembayaran::kedaluwarsakan()` dan cabang `expire` sama-sama memanggil satu metode pembatalan, jadi tidak mungkin scheduler melepas reservasi sementara webhook tidak (atau sebaliknya). Bedanya hanya pemicu dan catatan riwayatnya.
+- **Jadwal tiap menit, bukan tiap jam**: `kadaluwarsa_pada` berpresisi detik dan kolomnya berindeks, jadi pemeriksaan murah; menunda sampai satu jam berarti pesanan bisa dibayar beberapa saat setelah seharusnya batal. `withoutOverlapping()` mencegah dua eksekusi berjalan bersamaan.
+- **Pengembalian voucher dilewati**: FR-CKOT-02/03 (OPSIONAL) belum dibangun dan `orders.voucher_id` selalu kosong, sehingga tidak ada pemakaian yang bisa dikembalikan. `user-story.md:60` sudah menetapkan langkah ini dilewati sementara pembatalan tetap berjalan, jadi bukan aturan baru.
+- **Kabar pembatalan dikirim setelah transaksi commit**: bila email dikirim di dalam transaksi lalu transaksi gagal, User sudah menerima kabar untuk pembatalan yang tidak pernah terjadi. `KabarPembayaran` juga menangkap kegagalan SMTP, sehingga pesanan tetap batal meski server email mati.
+- **Checkout belum membuat baris `payments`**: scheduler menandai `kedaluwarsa` pada baris yang ada, dan tetap membatalkan pesanan bila barisnya belum lahir. Karena itu pesanan yang belum pernah dibuka halaman pembayarannya tidak mungkin lolos dari pembatalan hanya karena tidak punya tagihan.
 
 ## Aturan proyek yang tidak boleh dilanggar
 
