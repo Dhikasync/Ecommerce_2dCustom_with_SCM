@@ -117,12 +117,42 @@ class Midtrans
             'transaction_id' => isset($badan['transaction_id']) ? (string) $badan['transaction_id'] : null,
             'metode' => isset($badan['payment_type']) ? (string) $badan['payment_type'] : null,
             // Uang tidak boleh ditebak: bentuk "48000.00" diperiksa sebelum jadi rupiah.
-            'jumlah' => $this->bacaJumlah($badan['gross_amount'] ?? null),
+            'jumlah' => JumlahMidtrans::baca($badan['gross_amount'] ?? null),
             'transaction_status' => $status,
             'fraud_status' => isset($badan['fraud_status']) ? (string) $badan['fraud_status'] : null,
             'status_code' => (string) ($badan['status_code'] ?? $response->status()),
             'signature_key' => isset($badan['signature_key']) ? (string) $badan['signature_key'] : null,
         ];
+    }
+
+    /**
+     * KM-02, srs.md:297: keaslian notifikasi dibuktikan dengan
+     * sha512(order_id + status_code + gross_amount + server_key). Tanpa ini,
+     * siapa pun yang tahu URL webhook bisa mengaku sebagai Midtrans.
+     *
+     * @param  array<string, mixed>  $badan
+     */
+    public function tandaTanganSah(array $badan): bool
+    {
+        if ($this->serverKey === '') {
+            return false;
+        }
+
+        foreach (['order_id', 'status_code', 'gross_amount', 'signature_key'] as $wajib) {
+            if (! isset($badan[$wajib]) || ! is_scalar($badan[$wajib])) {
+                return false;
+            }
+        }
+
+        $diharapkan = hash('sha512', sprintf(
+            '%s%s%s%s',
+            $badan['order_id'],
+            $badan['status_code'],
+            $badan['gross_amount'],
+            $this->serverKey,
+        ));
+
+        return hash_equals($diharapkan, (string) $badan['signature_key']);
     }
 
     /**
@@ -210,19 +240,5 @@ class Midtrans
             is_string($pesan) && $pesan !== '' ? $pesan : 'tanpa pesan',
             $petunjuk,
         ));
-    }
-
-    /** @throws MidtransException */
-    private function bacaJumlah(mixed $nilai): int
-    {
-        if (is_int($nilai)) {
-            return $nilai;
-        }
-
-        if (is_string($nilai) && preg_match('/^(\d+)(\.0+)?$/', $nilai, $cocok) === 1) {
-            return (int) $cocok[1];
-        }
-
-        throw new MidtransException('Bentuk jumlah pembayaran dari Midtrans tidak dikenali');
     }
 }

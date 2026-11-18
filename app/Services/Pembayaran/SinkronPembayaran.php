@@ -23,9 +23,10 @@ class SinkronPembayaran
 
     /**
      * @param  array{order_id: string, transaction_id: ?string, metode: ?string, jumlah: int, transaction_status: string, fraud_status: ?string}  $status
-     * @return string status pembayaran setelah sinkronisasi
+     * @return array{status_pembayaran: string, diterapkan: bool} `diterapkan` false
+     *                                                            berarti notifikasi ini tidak mengubah apa pun (mis. kiriman ganda).
      */
-    public function terapkan(Order $pesanan, Payment $pembayaran, array $status): string
+    public function terapkan(Order $pesanan, Payment $pembayaran, array $status): array
     {
         return DB::transaction(function () use ($pesanan, $pembayaran, $status) {
             // NFR-PRF-05: baca ulang di bawah kunci, karena webhook dan tombol
@@ -34,7 +35,7 @@ class SinkronPembayaran
             $pembayaran = Payment::whereKey($pembayaran->id)->lockForUpdate()->firstOrFail();
 
             if ($pembayaran->status === 'lunas') {
-                return 'lunas';
+                return ['status_pembayaran' => 'lunas', 'diterapkan' => false];
             }
 
             $transaksi = [
@@ -43,24 +44,32 @@ class SinkronPembayaran
             ];
 
             if ($this->berhasil($status)) {
-                return $this->lunas($pesanan, $pembayaran, $transaksi);
+                return ['status_pembayaran' => $this->lunas($pesanan, $pembayaran, $transaksi), 'diterapkan' => true];
             }
 
             if ($status['transaction_status'] === 'expire') {
-                return $this->kedaluwarsa($pesanan, $pembayaran, $transaksi);
+                if ($pembayaran->status === 'kedaluwarsa') {
+                    return ['status_pembayaran' => 'kedaluwarsa', 'diterapkan' => false];
+                }
+
+                return ['status_pembayaran' => $this->kedaluwarsa($pesanan, $pembayaran, $transaksi), 'diterapkan' => true];
             }
 
             if (in_array($status['transaction_status'], self::GAGAL, true)) {
+                if ($pembayaran->status === 'gagal') {
+                    return ['status_pembayaran' => 'gagal', 'diterapkan' => false];
+                }
+
                 // Skenario #3: pesanan tetap Menunggu Pembayaran supaya User
                 // dapat mencoba metode lain selama 24 jam belum habis.
                 $pembayaran->update([...$transaksi, 'status' => 'gagal']);
 
-                return 'gagal';
+                return ['status_pembayaran' => 'gagal', 'diterapkan' => true];
             }
 
             // `pending` dan status lain yang tidak diatur dokumen: tidak ada
             // perubahan, bukan dianggap gagal.
-            return $pembayaran->status;
+            return ['status_pembayaran' => $pembayaran->status, 'diterapkan' => false];
         });
     }
 
