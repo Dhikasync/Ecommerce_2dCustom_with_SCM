@@ -7,11 +7,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Services\Pembayaran\Midtrans;
+use App\Services\Pembayaran\SinkronPembayaran;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * FR-PAYM-01, UC-31. Pembayaran hanya lewat Midtrans (SI-01); tidak ada
+ * FR-PAYM-01, UC-31/UC-33. Pembayaran hanya lewat Midtrans (SI-01); tidak ada
  * pembayaran manual maupun unggah bukti transfer.
  */
 class PembayaranController extends Controller
@@ -19,7 +20,10 @@ class PembayaranController extends Controller
     /** Respons memuat token sesi pembayaran: jangan disimpan perantara. */
     private const CACHE_CONTROL = 'no-store, private';
 
-    public function __construct(private readonly Midtrans $midtrans) {}
+    public function __construct(
+        private readonly Midtrans $midtrans,
+        private readonly SinkronPembayaran $sinkron,
+    ) {}
 
     /**
      * FR-PAYM-01 #1: menampilkan pilihan metode pembayaran dari payment gateway.
@@ -85,6 +89,80 @@ class PembayaranController extends Controller
         ]);
 
         return $this->jawab($pesanan, $pembayaran, 201, $transaksi['redirect_url']);
+    }
+
+    /**
+     * FR-PAYM-01 #5, UC-33: memverifikasi langsung ke gateway saat notifikasi
+     * terlambat, lalu menyamakan status pembayaran dan pesanan.
+     */
+    public function cek(Request $request, string $nomor): JsonResponse
+    {
+        $pesanan = Order::query()
+            ->where('nomor_pesanan', $nomor)
+            ->where('user_id', $request->user()->id)
+            ->first();
+
+        if (! $pesanan) {
+            return response()->json(['message' => 'Pesanan tidak ditemukan'], 404);
+        }
+
+        $pembayaran = $pesanan->payments()->latest('id')->first();
+
+        // Sudah lunas: keadaan lokal adalah yang terbaru, jadi tidak perlu
+        // memanggil gateway lagi dan efeknya tidak mungkin dobel.
+        if ($pembayaran?->status === 'lunas') {
+            return $this->jawabSinkron($pesanan, $pembayaran);
+        }
+
+        if ($pesanan->status !== 'menunggu_pembayaran') {
+            return response()->json(['message' => 'Pesanan ini tidak dapat dibayar'], 422);
+        }
+
+        if (! $pembayaran) {
+            return response()->json([
+                'message' => 'Pembayaran untuk pesanan ini belum dibuat',
+            ], 422);
+        }
+
+        try {
+            $status = $this->midtrans->status($pesanan->nomor_pesanan);
+        } catch (MidtransException $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Pembayaran belum dapat diproses, silakan coba lagi',
+            ], 422);
+        }
+
+        // Jawaban pihak ketiga tidak boleh langsung dipercaya: pastikan yang
+        // ditagih memang pesanan ini, dengan nominal yang sama.
+        if ($status['order_id'] !== $pesanan->nomor_pesanan) {
+            report(new MidtransException('order_id Midtrans tidak cocok: '.$status['order_id']));
+
+            return response()->json([
+                'message' => 'Pembayaran belum dapat diproses, silakan coba lagi',
+            ], 422);
+        }
+
+        if ($status['jumlah'] !== $pesanan->total) {
+            return response()->json([
+                'message' => 'Nominal pembayaran tidak cocok dengan pesanan',
+            ], 422);
+        }
+
+        $this->sinkron->terapkan($pesanan, $pembayaran, $status);
+
+        return $this->jawabSinkron($pesanan->refresh(), $pembayaran->refresh());
+    }
+
+    private function jawabSinkron(Order $pesanan, Payment $pembayaran): JsonResponse
+    {
+        return response()->json(['data' => [
+            'nomor_pesanan' => $pesanan->nomor_pesanan,
+            'status_pembayaran' => $pembayaran->status,
+            'status_pesanan' => $pesanan->status,
+            'dibayar_pada' => $pembayaran->dibayar_pada?->toIso8601String(),
+        ]])->header('Cache-Control', self::CACHE_CONTROL);
     }
 
     /**
