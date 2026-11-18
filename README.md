@@ -2,7 +2,7 @@
 
 Backend marketplace untuk **Toko Nichibag**: penjualan tas dengan **desain kustom 2D** dan **integrasi rantai pasok** (bahan baku, distributor, purchase order, penerimaan barang).
 
-Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS v1.0** dan **User Story v1.1.4**. Saat ini fokusnya backend JSON; antarmuka belum dibangun.
+Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS v1.1** dan **User Story v1.1.4**. Saat ini fokusnya backend JSON; antarmuka belum dibangun.
 
 <p>
   <img alt="PHP" src="https://img.shields.io/badge/PHP-%5E8.3-777BB4?logo=php&logoColor=white">
@@ -21,12 +21,13 @@ Proyek ini adalah bagian dari tugas akhir dan dibangun bertahap mengikuti **SRS 
 | Katalog produk | FR-KTLG | ✅ semua skenario: daftar produk (FR-KTLG-01), detail produk (FR-KTLG-02), filter kategori/jenis + pencarian + urut harga + reset filter (FR-KTLG-03) |
 | Keranjang & checkout | FR-CART, FR-CKOT | 🔄 berjalan: FR-CART-01 kelola keranjang, FR-CART-02 ringkasan (subtotal, label "Stok tidak mencukupi"/"Produk tidak tersedia", `bisa_checkout`), FR-CKOT-04 kurir + alamat asal toko, FR-CKOT-01 checkout (`GET /checkout`, `POST /checkout/ongkir`, `POST /checkout`: reservasi stok, pesanan Menunggu Pembayaran/Menunggu Validasi, salinan alamat). Sisi custom masih dummy (`design_id` diterima tanpa aturan "hanya dari preview") sampai FR-CDSN-04 |
 | Pesanan & pembayaran | FR-ORDR, FR-PAYM | ⏳ pesanan sudah dibentuk lewat FR-CKOT-01 (status, salinan alamat, reservasi stok); daftar/detail pesanan, pembayaran Midtrans, dan pembatalan belum ada |
-| Desain kustom 2D | FR-DSN | ⏳ |
+| Desain kustom 2D | FR-CDSN | ⏳ belum dibangun: FR-CDSN-01 sampai FR-CDSN-07 belum ada. Yang sudah ada hanya kolom `products.sla_hari` dan `order_items.sla_hari` yang dibaca checkout (FR-CDSN-06), sedangkan endpoint untuk mengisi SLA (FR-CDSN-07), template, editor, unggah, preview, dan validasi desain belum ada |
 | Rantai pasok (SCM) | FR-SCM | ⏳ |
-| Profil & alamat | FR-PROF | ✅ semua skenario: lihat/ubah profil, ganti email, ubah password, cari lokasi, kelola alamat + alamat utama. Penjagaan hapus alamat yang dipakai pesanan berjalan menunggu modul pesanan (`srs.md:378`) |
+| Profil & alamat | FR-PROF | ✅ semua skenario FR-PROF-01: lihat/ubah profil, ganti email, ubah password, cari lokasi, kelola alamat + alamat utama. Di luar skenario itu, `srs.md:378` meminta sistem menolak hapus alamat yang dipakai pesanan berjalan; aturan itu **belum dibangun** karena `AlamatController::hapus` baru memeriksa "minimal satu alamat tersisa", padahal pesanan sudah bisa dibentuk sejak FR-CKOT-01 |
 | Dashboard admin | FR-DASH | ⏳ ditunda sampai UI dimulai |
+| Proses otomatis berbasis waktu | FR-SYS-01 | ⏳ belum dibangun: belum ada scheduler maupun perintah terjadwal, jadi tiga skenario WAJIB-nya (#1 pembayaran kedaluwarsa, #2 masa revisi desain berakhir, #7 proses tidak diterapkan ganda) belum berjalan. Akibat yang paling terasa: reservasi stok pesanan kedaluwarsa belum dirilis otomatis — utang yang sama dengan butir "Reservasi yang kedaluwarsa belum dirilis otomatis" di bawah |
 
-Catatan jujur: login Admin sudah berjalan, tetapi **dashboard belum ada**; sementara Admin diarahkan ke halaman utama sesuai `user-story.md:19`. Modul profil masih berjalan — lihat baris FR-PROF.
+Catatan jujur: login Admin sudah berjalan, tetapi **dashboard belum ada**; sementara Admin diarahkan ke halaman utama sesuai `user-story.md:19`. Pada FR-PROF, seluruh skenario FR-PROF-01 sudah berjalan, tetapi satu reaksi sistem di `srs.md:378` — menolak hapus alamat yang dipakai pesanan berjalan — belum dibangun; lihat baris FR-PROF.
 
 ## Tumpukan teknologi
 
@@ -189,7 +190,7 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **273 test lulus, 944 assertion** (dijalankan lokal dan otomatis di CI).
+Status terakhir: **399 test lulus, 1457 assertion** (dijalankan lokal di branch ini dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
@@ -379,4 +380,4 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 
 ## Dokumen acuan
 
-SRS v1.0 dan User Story v1.1.4 adalah satu-satunya sumber kebenaran untuk tabel, kolom, status, dan aturan bisnis. Dokumen tersebut tidak disertakan di repositori ini.
+SRS v1.1 dan User Story v1.1.4 adalah satu-satunya sumber kebenaran untuk tabel, kolom, status, dan aturan bisnis. Dokumen tersebut tidak disertakan di repositori ini (folder `.opencode` diabaikan Git). Salinan Markdown untuk agen tersimpan di `.opencode/skills/nichibag-docs/references/`; salinan `srs.md` di mesin pengembang belum memuat Bab 5 Skenario Use Case yang menandai v1.1, jadi Bab 5 selalu dibaca dari dokumen resmi.
