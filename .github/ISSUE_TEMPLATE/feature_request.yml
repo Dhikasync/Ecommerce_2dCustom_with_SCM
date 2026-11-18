@@ -1,0 +1,89 @@
+name: Usulan fitur atau kebutuhan FR
+description: Usulan perubahan perilaku yang merujuk kode FR pada dokumen acuan
+title: "[usulan] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Proyek ini hanya mengikuti **SRS v1.1** dan **User Story v1.1.4**.
+        Tabel, kolom, status, aturan bisnis, dan kalimat pesan tidak boleh
+        dikarang. Kalau usulanmu belum ada di dokumen, tulis itu apa adanya —
+        usulan seperti ini dibahas dulu sebelum jadi kode.
+
+        Satu issue untuk satu usulan. Untuk kerentanan, gunakan
+        [SECURITY.md](https://github.com/Dhikasync/Ecommerce_2dCustom_with_SCM/blob/main/SECURITY.md).
+
+  - type: input
+    id: fr
+    attributes:
+      label: Kode FR
+      description: Kode fitur yang diusulkan, persis seperti di dokumen.
+      placeholder: FR-PAYM-01
+    validations:
+      required: true
+
+  - type: input
+    id: skenario
+    attributes:
+      label: Nomor skenario
+      description: Kalau usulan menyentuh skenario tertentu. Boleh kosong.
+      placeholder: "#5 - Cek Status Pembayaran"
+    validations:
+      required: false
+
+  - type: textarea
+    id: sekarang
+    attributes:
+      label: Perilaku sekarang
+      description: Apa yang terjadi hari ini, termasuk bagian yang belum dibangun.
+      placeholder: Contoh - pembayaran hanya bisa dibuka; status belum bisa dicek ulang.
+    validations:
+      required: true
+
+  - type: textarea
+    id: usulan
+    attributes:
+      label: Perilaku yang diusulkan
+      description: Apa yang seharusnya terjadi, dari sudut pandang User atau Admin.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: dokumen
+    attributes:
+      label: Dampak ke dokumen acuan
+      description: Usulan yang mengubah aturan bisnis harus lewat dokumen lebih dulu.
+      options:
+        - Tidak ada — perilaku sudah diatur dokumen
+        - Perlu perubahan SRS
+        - Perlu perubahan User Story
+        - Belum ada di dokumen sama sekali
+    validations:
+      required: true
+
+  - type: textarea
+    id: alasan
+    attributes:
+      label: Alasan dan dampak
+      description: Siapa yang terbantu, dan apa yang rusak kalau tidak dikerjakan.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatif
+    attributes:
+      label: Alternatif yang sudah dipertimbangkan
+      description: Termasuk alasan menolak cara lain, kalau ada.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: konfirmasi
+    attributes:
+      label: Konfirmasi
+      options:
+        - label: Saya sudah memeriksa README dan mencari issue serupa.
+          required: true
+        - label: Usulan ini tidak menambah tabel, kolom, status, atau kalimat pesan yang tidak ada di dokumen.
+          required: true

@@ -1,0 +1,102 @@
+name: Laporan bug
+description: Sesuatu tidak berjalan sesuai dokumen acuan atau README
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Terima kasih sudah melaporkan. Sebelum mengisi:
+
+        - **Jangan** memakai formulir ini untuk kerentanan keamanan. Ikuti
+          [SECURITY.md](https://github.com/Dhikasync/Ecommerce_2dCustom_with_SCM/blob/main/SECURITY.md).
+        - Jangan menempelkan `.env`, kunci gateway, token, atau data pribadi
+          siapa pun.
+        - Laporkan satu masalah per issue supaya mudah dilacak.
+
+  - type: textarea
+    id: ringkasan
+    attributes:
+      label: Ringkasan
+      description: Satu atau dua kalimat tentang apa yang salah.
+      placeholder: Contoh - POST /pesanan/{nomor}/pembayaran menjawab 500 saat total pesanan nol.
+    validations:
+      required: true
+
+  - type: textarea
+    id: langkah
+    attributes:
+      label: Langkah reproduksi
+      description: Urutan yang bisa diulang dari instalasi bersih.
+      placeholder: |
+        1. Siapkan data ...
+        2. Kirim permintaan ...
+        3. Lihat hasilnya ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: harapan
+    attributes:
+      label: Perilaku yang diharapkan
+      description: Kalau diatur dokumen, sebut kode FR dan nomor skenarionya.
+      placeholder: "Contoh - FR-PAYM-01 #1, pesanan produk jadi berstatus Menunggu Pembayaran mendapat token Snap."
+    validations:
+      required: true
+
+  - type: textarea
+    id: aktual
+    attributes:
+      label: Perilaku aktual dan pesan galat
+      description: Tempel pesan galat atau log apa adanya, jangan diketik ulang.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: endpoint
+    attributes:
+      label: Rute atau berkas yang terdampak
+      description: Kalau tahu, sebutkan nama rute, controller, atau migration-nya.
+      placeholder: POST /checkout (checkout.buat), CheckoutController
+    validations:
+      required: false
+
+  - type: input
+    id: fr
+    attributes:
+      label: Kode FR terkait
+      description: Kalau ada. Tulis "tidak tahu" bila belum yakin.
+      placeholder: "FR-PAYM-01 #5"
+    validations:
+      required: false
+
+  - type: input
+    id: lingkungan
+    attributes:
+      label: Lingkungan
+      description: Versi PHP dan PostgreSQL, serta sistem operasi.
+      placeholder: PHP 8.5, PostgreSQL 18, Windows 11
+    validations:
+      required: true
+
+  - type: textarea
+    id: tambahan
+    attributes:
+      label: Catatan tambahan
+      description: Keluaran `php artisan test --filter=...`, dugaan penyebab, atau hal lain yang membantu.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: konfirmasi
+    attributes:
+      label: Konfirmasi
+      options:
+        - label: Saya sudah mencari issue lain dengan masalah yang sama.
+          required: true
+        - label: Saya sudah memasang versi terbaru `main`.
+          required: true
+        - label: Laporan ini tidak memuat kunci, token, atau data pribadi orang lain.
+          required: true
