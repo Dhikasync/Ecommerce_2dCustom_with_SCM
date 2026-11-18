@@ -44,4 +44,14 @@ return [
         'base_url' => env('RAJAONGKIR_BASE_URL', 'https://rajaongkir.komerce.id/api/v1'),
     ],
 
+    /*
+     * SI-01: payment gateway Midtrans. `server_key` hanya dipakai di server dan
+     * tidak pernah dikirim ke browser; `client_key` dipakai Snap di sisi klien.
+     */
+    'midtrans' => [
+        'server_key' => env('MIDTRANS_SERVER_KEY'),
+        'client_key' => env('MIDTRANS_CLIENT_KEY'),
+        'is_production' => (bool) env('MIDTRANS_IS_PRODUCTION', false),
+    ],
+
 ];
