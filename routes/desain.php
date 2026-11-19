@@ -17,4 +17,10 @@ Route::middleware(['auth', 'active', 'role:admin_ecommerce'])
 
         Route::post('/template', [TemplateController::class, 'simpan'])
             ->name('template.store');
+
+        Route::put('/template/{id}', [TemplateController::class, 'ubah'])
+            ->name('template.update');
+
+        Route::delete('/template/{id}', [TemplateController::class, 'hapus'])
+            ->name('template.destroy');
     });
