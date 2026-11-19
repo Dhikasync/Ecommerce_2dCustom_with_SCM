@@ -11,6 +11,12 @@ class Template extends Model
 
     protected $casts = [
         'is_aktif' => 'boolean',
+        'lebar_kanvas' => 'integer',
+        'tinggi_kanvas' => 'integer',
+        'area_x' => 'integer',
+        'area_y' => 'integer',
+        'area_lebar' => 'integer',
+        'area_tinggi' => 'integer',
     ];
 
     public function product()
