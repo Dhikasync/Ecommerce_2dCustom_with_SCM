@@ -8,6 +8,22 @@ use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
+    /**
+     * Lampiran B, status pesanan. Urutannya mengikuti alur, dan dipakai untuk
+     * memvalidasi filter daftar (FR-ORDR-01 #1).
+     */
+    public const STATUS = [
+        'menunggu_validasi',
+        'menunggu_revisi_desain',
+        'menunggu_pembayaran',
+        'diproses',
+        'sedang_dicetak',
+        'siap_kirim',
+        'dikirim',
+        'selesai',
+        'dibatalkan',
+    ];
+
     protected $fillable = [
         'user_id',
         'address_id',
