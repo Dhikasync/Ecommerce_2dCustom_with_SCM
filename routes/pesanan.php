@@ -12,4 +12,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     // FR-ORDR-01 #1: "Pesanan Saya" dengan filter status pesanan.
     Route::get('/pesanan', [PesananController::class, 'index'])
         ->name('pesanan.index');
+
+    // FR-ORDR-01 #2: detail terpisah per pesanan.
+    Route::get('/pesanan/{nomor}', [PesananController::class, 'show'])
+        ->name('pesanan.show');
 });
