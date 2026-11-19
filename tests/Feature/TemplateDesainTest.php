@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Auth\User;
+use App\Models\Design;
 use App\Models\Produk\Category;
 use App\Models\Produk\Product;
 use App\Models\Template;
@@ -23,6 +24,8 @@ class TemplateDesainTest extends TestCase
     private const PESAN_FORMAT = 'Format file template harus PNG, JPG, atau SVG';
 
     private const PESAN_UKURAN = 'Ukuran file template maksimal 10 MB';
+
+    private const PESAN_MASIH_DIPAKAI = 'Template masih dipakai desain User. Nonaktifkan saja, jangan dihapus';
 
     protected function setUp(): void
     {
@@ -276,6 +279,228 @@ class TemplateDesainTest extends TestCase
             ->getJson('/admin/template?is_aktif=0')
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.nama', 'Template Lama');
+    }
+
+    // ---------- FR-CDSN-01 #3: mengubah template ----------
+
+    private function template(Product $produk, array $ganti = []): Template
+    {
+        return Template::create(array_merge([
+            'product_id' => $produk->id,
+            'nama' => 'Template Paper Bag',
+            'file' => 'template/lama.png',
+            'lebar_kanvas' => 800,
+            'tinggi_kanvas' => 600,
+            'area_x' => 50,
+            'area_y' => 40,
+            'area_lebar' => 300,
+            'area_tinggi' => 200,
+            'is_aktif' => true,
+        ], $ganti));
+    }
+
+    private function desain(Template $template): Design
+    {
+        return Design::create([
+            'user_id' => User::factory()->create(['role' => 'user'])->id,
+            'template_id' => $template->id,
+            'data_desain' => ['elemen' => [['tipe' => 'teks', 'isi' => 'Halo']]],
+            'preview_gambar' => 'desain/preview.png',
+            'status' => 'draft',
+            'versi' => 1,
+        ]);
+    }
+
+    public function test_admin_mengubah_kanvas_area_dan_berkas_template(): void
+    {
+        $produk = $this->produkCustom();
+        $template = $this->template($produk);
+        Storage::disk('public')->put('template/lama.png', 'isi lama');
+
+        $this->actingAs($this->adminEcommerce())
+            ->post('/admin/template/'.$template->id, [
+                '_method' => 'PUT',
+                'product_id' => $produk->id,
+                'nama' => 'Template Baru',
+                'file' => $this->berkas('baru.png'),
+                'lebar_kanvas' => 1000,
+                'tinggi_kanvas' => 700,
+                'area_x' => 10,
+                'area_y' => 10,
+                'area_lebar' => 400,
+                'area_tinggi' => 300,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.nama', 'Template Baru')
+            ->assertJsonPath('data.lebar_kanvas', 1000)
+            ->assertJsonPath('data.area_lebar', 400);
+
+        $template->refresh();
+
+        $this->assertStringEndsWith('.png', $template->file);
+        $this->assertNotSame('template/lama.png', $template->file);
+        Storage::disk('public')->assertExists($template->file);
+        Storage::disk('public')->assertMissing('template/lama.png');
+    }
+
+    public function test_ubah_template_tanpa_berkas_baru_mempertahankan_berkas_lama(): void
+    {
+        $produk = $this->produkCustom();
+        $template = $this->template($produk);
+        Storage::disk('public')->put('template/lama.png', 'isi lama');
+
+        $this->actingAs($this->adminEcommerce())
+            ->put('/admin/template/'.$template->id, [
+                'product_id' => $produk->id,
+                'nama' => 'Template Paper Bag',
+                'lebar_kanvas' => 900,
+                'tinggi_kanvas' => 600,
+                'area_x' => 50,
+                'area_y' => 40,
+                'area_lebar' => 300,
+                'area_tinggi' => 200,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.file', 'template/lama.png')
+            ->assertJsonPath('data.lebar_kanvas', 900);
+
+        Storage::disk('public')->assertExists('template/lama.png');
+    }
+
+    /** FR-CDSN-01 #3: desain User dengan template lama tidak ikut berubah. */
+    public function test_desain_user_tidak_berubah_saat_template_diubah(): void
+    {
+        $produk = $this->produkCustom();
+        $template = $this->template($produk);
+        $desain = $this->desain($template);
+
+        Storage::disk('public')->put('template/lama.png', 'isi lama');
+        Storage::disk('public')->put('desain/preview.png', 'preview');
+
+        $this->actingAs($this->adminEcommerce())
+            ->post('/admin/template/'.$template->id, [
+                '_method' => 'PUT',
+                'product_id' => $produk->id,
+                'nama' => 'Template Baru',
+                'file' => $this->berkas('baru.png'),
+                'lebar_kanvas' => 1000,
+                'tinggi_kanvas' => 700,
+                'area_x' => 10,
+                'area_y' => 10,
+                'area_lebar' => 400,
+                'area_tinggi' => 300,
+            ])
+            ->assertOk();
+
+        $desain->refresh();
+
+        // jsonb tidak menyimpan urutan kunci, jadi dibandingkan dengan assertEquals.
+        $this->assertEquals(['elemen' => [['tipe' => 'teks', 'isi' => 'Halo']]], $desain->data_desain);
+        $this->assertSame('desain/preview.png', $desain->preview_gambar);
+        $this->assertSame(1, $desain->versi);
+        $this->assertSame($template->id, $desain->template_id);
+
+        // Berkas lama tetap ada selama masih ada desain yang memakai template ini.
+        Storage::disk('public')->assertExists('template/lama.png');
+        Storage::disk('public')->assertExists('desain/preview.png');
+    }
+
+    public function test_ubah_template_memakai_aturan_validasi_yang_sama(): void
+    {
+        $produk = $this->produkCustom();
+        $template = $this->template($produk);
+        $admin = $this->adminEcommerce();
+
+        $this->actingAs($admin)
+            ->post('/admin/template/'.$template->id, [
+                '_method' => 'PUT',
+                'product_id' => $produk->id,
+                'nama' => 'Template Paper Bag',
+                'file' => $this->berkas('template.pdf'),
+                'lebar_kanvas' => 800,
+                'tinggi_kanvas' => 600,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.file.0', self::PESAN_FORMAT);
+
+        // Kanvas lebih kecil dari area lama: divalidasi terhadap nilai tersimpan.
+        $this->actingAs($admin)
+            ->putJson('/admin/template/'.$template->id, [
+                'product_id' => $produk->id,
+                'nama' => 'Template Paper Bag',
+                'lebar_kanvas' => 200,
+                'tinggi_kanvas' => 600,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.area_x.0', 'Batas area kustomisasi harus berada di dalam kanvas 200 x 600');
+
+        $this->assertSame(800, $template->refresh()->lebar_kanvas);
+    }
+
+    public function test_ubah_template_yang_tidak_ada_dijawab_404(): void
+    {
+        $produk = $this->produkCustom();
+
+        $this->actingAs($this->adminEcommerce())
+            ->put('/admin/template/999', $this->dataTemplate($produk))
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Template tidak ditemukan');
+    }
+
+    // ---------- FR-CDSN-01 #4: menonaktifkan dan menghapus template ----------
+
+    public function test_admin_menghapus_template_beserta_berkasnya(): void
+    {
+        $template = $this->template($this->produkCustom());
+        Storage::disk('public')->put('template/lama.png', 'isi lama');
+
+        $this->actingAs($this->adminEcommerce())
+            ->deleteJson('/admin/template/'.$template->id)
+            ->assertOk()
+            ->assertJsonPath('message', 'Template berhasil dihapus');
+
+        $this->assertSame(0, Template::count());
+        Storage::disk('public')->assertMissing('template/lama.png');
+    }
+
+    public function test_hapus_template_ditolak_kalau_masih_dipakai_desain(): void
+    {
+        $template = $this->template($this->produkCustom());
+        $this->desain($template);
+        Storage::disk('public')->put('template/lama.png', 'isi lama');
+
+        $this->actingAs($this->adminEcommerce())
+            ->deleteJson('/admin/template/'.$template->id)
+            ->assertStatus(422)
+            ->assertJsonPath('message', self::PESAN_MASIH_DIPAKAI);
+
+        $this->assertSame(1, Template::count());
+        Storage::disk('public')->assertExists('template/lama.png');
+    }
+
+    public function test_menonaktifkan_template_menyembunyikannya_dari_pilihan_baru(): void
+    {
+        $produk = $this->produkCustom();
+        $template = $this->template($produk);
+        $admin = $this->adminEcommerce();
+
+        $this->actingAs($admin)
+            ->put('/admin/template/'.$template->id, [
+                'product_id' => $produk->id,
+                'nama' => 'Template Paper Bag',
+                'lebar_kanvas' => 800,
+                'tinggi_kanvas' => 600,
+                'area_x' => 50,
+                'area_y' => 40,
+                'area_lebar' => 300,
+                'area_tinggi' => 200,
+                'is_aktif' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.is_aktif', false);
+
+        $this->actingAs($admin)->getJson('/admin/template?is_aktif=1')->assertJsonCount(0, 'data');
+        $this->actingAs($admin)->getJson('/admin/template')->assertJsonCount(1, 'data');
     }
 
     public function test_user_biasa_dan_admin_scm_tidak_boleh_mengelola_template(): void

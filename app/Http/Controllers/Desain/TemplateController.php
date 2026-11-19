@@ -8,6 +8,8 @@ use App\Models\Template;
 use App\Support\GambarPublik;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -20,11 +22,15 @@ class TemplateController extends Controller
 
     private const FOLDER = 'template';
 
+    private const PESAN_TIDAK_DITEMUKAN = 'Template tidak ditemukan';
+
     private const PESAN_FORMAT = 'Format file template harus PNG, JPG, atau SVG';
 
     private const PESAN_UKURAN = 'Ukuran file template maksimal 10 MB';
 
     private const PESAN_BUKAN_CUSTOM = 'Template hanya dapat dikaitkan ke produk custom';
+
+    private const PESAN_MASIH_DIPAKAI = 'Template masih dipakai desain User. Nonaktifkan saja, jangan dihapus';
 
     public function daftar(Request $request): JsonResponse
     {
@@ -62,16 +68,80 @@ class TemplateController extends Controller
         ], 201);
     }
 
+    /** FR-CDSN-01 #3: ubah file/kanvas/area tanpa menyentuh desain User. */
+    public function ubah(Request $request, int $id): JsonResponse
+    {
+        $template = Template::find($id);
+
+        if (! $template) {
+            return $this->tidakDitemukan();
+        }
+
+        $data = $this->validasi($request, $template);
+        $file = $request->file('file');
+        $berkasLama = $template->file;
+
+        DB::transaction(function () use ($template, $data, $file) {
+            if ($file !== null) {
+                $data['file'] = $file->store(self::FOLDER, self::DISK);
+            }
+
+            $template->update($data);
+        });
+
+        // Berkas lama hanya dibuang kalau tidak ada desain yang masih memakai
+        // template ini (FR-CDSN-01 #3).
+        if ($file !== null && $berkasLama !== $template->file && ! $template->designs()->exists()) {
+            Storage::disk(self::DISK)->delete($berkasLama);
+        }
+
+        return response()->json([
+            'message' => 'Template berhasil diubah',
+            'data' => $this->ringkas($template->fresh('product')),
+        ]);
+    }
+
+    /** FR-CDSN-01 #4: hapus template yang belum dipakai desain User. */
+    public function hapus(int $id): JsonResponse
+    {
+        $template = Template::find($id);
+
+        if (! $template) {
+            return $this->tidakDitemukan();
+        }
+
+        if ($template->designs()->exists()) {
+            return response()->json(['message' => self::PESAN_MASIH_DIPAKAI], 422);
+        }
+
+        $berkas = $template->file;
+
+        $template->delete();
+        Storage::disk(self::DISK)->delete($berkas);
+
+        return response()->json(['message' => 'Template berhasil dihapus']);
+    }
+
+    private function tidakDitemukan(): JsonResponse
+    {
+        return response()->json(['message' => self::PESAN_TIDAK_DITEMUKAN], 404);
+    }
+
     /**
      * @return array<string, mixed>
      */
-    private function validasi(Request $request): array
+    private function validasi(Request $request, ?Template $template = null): array
     {
         $data = $request->validate([
             'product_id' => ['required', 'integer', 'exists:products,id'],
             'nama' => ['required', 'string', 'max:255'],
             // NFR-FIL-02: PNG/JPG/SVG maksimal 10 MB (10240 kilobyte).
-            'file' => ['required', 'file', 'mimes:png,jpg,jpeg,svg', 'max:10240'],
+            'file' => [
+                $template === null ? 'required' : 'sometimes',
+                'file',
+                'mimes:png,jpg,jpeg,svg',
+                'max:10240',
+            ],
             'lebar_kanvas' => ['required', 'integer', 'min:1'],
             'tinggi_kanvas' => ['required', 'integer', 'min:1'],
             'area_x' => ['nullable', 'integer', 'min:0'],
@@ -91,40 +161,46 @@ class TemplateController extends Controller
             ]);
         }
 
-        $this->pastikanAreaValid($data);
+        $this->pastikanAreaValid($data, $template);
 
         return $data;
     }
 
     /**
      * FR-CDSN-01 #2: editor membatasi elemen dengan keempat angka ini, jadi
-     * area setengah jadi atau yang keluar kanvas tidak boleh tersimpan.
+     * area setengah jadi atau yang keluar kanvas tidak boleh tersimpan. Saat
+     * mengubah, kolom yang tidak dikirim diambil dari nilai tersimpan.
      *
      * @param  array<string, mixed>  $data
      */
-    private function pastikanAreaValid(array &$data): void
+    private function pastikanAreaValid(array $data, ?Template $template = null): void
     {
-        $kolom = ['area_x', 'area_y', 'area_lebar', 'area_tinggi'];
+        $nilai = fn (string $kolom) => array_key_exists($kolom, $data)
+            ? $data[$kolom]
+            : $template?->{$kolom};
 
-        foreach ($kolom as $nama) {
-            $data[$nama] ??= null;
-        }
+        $area = [
+            'area_x' => $nilai('area_x'),
+            'area_y' => $nilai('area_y'),
+            'area_lebar' => $nilai('area_lebar'),
+            'area_tinggi' => $nilai('area_tinggi'),
+        ];
 
-        $terisi = array_filter($kolom, fn (string $nama) => $data[$nama] !== null);
+        $terisi = array_filter($area, fn ($angka) => $angka !== null);
 
         if ($terisi === []) {
             return;
         }
 
-        if (count($terisi) !== count($kolom)) {
+        if (count($terisi) !== count($area)) {
             throw ValidationException::withMessages([
                 'area_x' => 'Batas area kustomisasi harus diisi lengkap: x, y, lebar, dan tinggi',
             ]);
         }
 
-        $kanvas = $data['lebar_kanvas'].' x '.$data['tinggi_kanvas'];
-        $melewatiKanan = $data['lebar_kanvas'] < $data['area_x'] + $data['area_lebar'];
-        $melewatiBawah = $data['tinggi_kanvas'] < $data['area_y'] + $data['area_tinggi'];
+        $kanvas = $nilai('lebar_kanvas').' x '.$nilai('tinggi_kanvas');
+        $melewatiKanan = $nilai('lebar_kanvas') < $area['area_x'] + $area['area_lebar'];
+        $melewatiBawah = $nilai('tinggi_kanvas') < $area['area_y'] + $area['area_tinggi'];
 
         if ($melewatiKanan || $melewatiBawah) {
             throw ValidationException::withMessages([
