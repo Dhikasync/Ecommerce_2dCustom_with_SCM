@@ -27,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::middleware('web')->group(base_path('routes/keranjang.php'));
             Route::middleware('web')->group(base_path('routes/checkout.php'));
             Route::middleware('web')->group(base_path('routes/pembayaran.php'));
+            Route::middleware('web')->group(base_path('routes/pesanan.php'));
             // Webhook gateway: tanpa `web` (tanpa sesi/CSRF), diverifikasi tanda tangan.
             Route::group([], base_path('routes/notifikasi-pembayaran.php'));
         },

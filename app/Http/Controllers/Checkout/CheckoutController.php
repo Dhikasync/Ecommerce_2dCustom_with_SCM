@@ -18,6 +18,7 @@ use App\Models\ShopSetting;
 use App\Services\Profil\RajaOngkir;
 use App\Support\GambarPublik;
 use App\Support\MasalahItemKeranjang;
+use App\Support\RingkasanPesanan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -493,16 +494,13 @@ class CheckoutController extends Controller
         $pesanan->load('orderItems.design', 'latestPayment');
 
         $sla = $pesanan->orderItems->pluck('sla_hari')->filter()->max();
-        $desain = $pesanan->orderItems->pluck('design')->filter()->first();
 
         return [
             'id' => $pesanan->id,
             'nomor_pesanan' => $pesanan->nomor_pesanan,
             'status' => $pesanan->status,
-            // Lampiran A: "Belum Dibayar" sampai ada pembayaran; baris payments
-            // baru dibuat modul PAYM saat transaksi gateway dimulai.
-            'status_pembayaran' => $pesanan->latestPayment?->status ?? 'belum_dibayar',
-            'status_desain' => $desain?->status ?? 'tidak_ada',
+            'status_pembayaran' => RingkasanPesanan::statusPembayaran($pesanan),
+            'status_desain' => RingkasanPesanan::statusDesain($pesanan),
             'subtotal_barang' => $pesanan->subtotal_barang,
             'ongkir' => $pesanan->ongkir,
             'diskon_voucher' => $pesanan->diskon_voucher,
