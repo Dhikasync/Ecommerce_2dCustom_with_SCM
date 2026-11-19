@@ -83,6 +83,7 @@ app/
 │   └── BatalkanPesananKedaluwarsa.php   # sapu pesanan lewat batas bayar (FR-SYS-01 #1)
 ├── Rules/NomorTelepon.php               # format nomor telepon +62 (dipakai auth + profil)
 ├── Support/
+│   ├── BatasPermintaan.php              # balasan 429 Bahasa Indonesia (NFR-LOC-01)
 │   ├── GambarPublik.php                 # URL gambar dari disk publik
 │   └── MasalahItemKeranjang.php         # label masalah item, dipakai keranjang + checkout
 ├── Services/
@@ -231,7 +232,7 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **461 test lulus, 1729 assertion** (dijalankan lokal dan otomatis di CI).
+Status terakhir: **464 test lulus, 1744 assertion** (dijalankan lokal dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
@@ -387,6 +388,7 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Throttle 10/menit untuk `POST /checkout/ongkir` dan 6/menit untuk `POST /checkout`**: bukan aturan dokumen. Satu panggilan ongkir memotong satu kuota RajaOngkir (terukur: 4 panggilan = 4/100), sehingga satu akun bisa menghentikan seluruh penjualan; dan tiap pesanan mengunci stok, sehingga pembuatan pesanan tanpa batas mengunci stok untuk semua User. Keduanya memakai awalan `checkout-ongkir` dan `checkout-buat` supaya hitungannya terpisah — tanpa awalan, Laravel memakai satu kunci per User untuk semua route, sehingga batas 6 akan menimpa batas 10.
 - **Gangguan RajaOngkir diulang satu kali**: hanya gangguan koneksi dan balasan `5xx`, dengan jeda 200 ms. `4xx` tidak diulang karena kunci salah atau permintaan cacat tidak akan sembuh dengan pengulangan. Pengulangan ini tidak mengubah kontrak: kalau tetap gagal, jawabannya `422` "Ongkir belum dapat dihitung, silakan coba lagi" seperti skenario #8, dan pesanan tetap tidak dibuat (`srs.md:521`).
 - **`cost` dari RajaOngkir diperiksa sebelum menjadi uang**: harus bilangan bulat positif. Nilai `0` atau negatif ditolak dan alurnya jatuh ke pesan #8, karena `srs.md:520` melarang ongkir "diam-diam menjadi Rp 0" — dan nilai negatif akan menurunkan total pesanan.
+- **Balasan 429 berbahasa Indonesia (NFR-LOC-01)**: middleware `throttle` bawaan Laravel melempar pesan Inggris `Too Many Attempts.` tanpa sisa waktu tunggu. `bootstrap/app.php` menerjemahkannya menjadi `429` `{"message":"Terlalu banyak permintaan, coba lagi beberapa saat lagi","retry_after":N}` dan tetap mengirim header `Retry-After` serta `X-RateLimit-*`. Kalimatnya satu tempat (`App\Support\BatasPermintaan`), dipakai juga oleh pembatas manual di `AuthController` (login 5 kegagalan, kirim ulang verifikasi) supaya tidak ada dua kalimat berbeda untuk keadaan yang sama.
 - **`Cache-Control: no-store` pada tiga respons checkout**: bukan aturan dokumen. Respons memuat alamat lengkap dan nomor telepon, jadi tidak boleh tinggal di cache browser atau proksi bersama.
 - **Reservasi yang kedaluwarsa kini dirilis otomatis (FR-SYS-01 #1)**: `orders.kadaluwarsa_pada` sebelumnya hanya ditulis tanpa ada yang menegakkan, sehingga `stok_direservasi` menggantung dan hanya bisa dikembalikan lewat Admin. Sekarang `php artisan orders:kedaluwarsa` (dijadwalkan tiap menit) membatalkan pesanan dengan `alasan_pembatalan` tercatat, melepas reservasi, menandai `payments` yang masih `belum_dibayar` atau `gagal` menjadi `kedaluwarsa`, menulis riwayat status, dan mengirim kabar. Pesanan `menunggu_validasi` tidak ikut tersapu karena batasnya adalah masa revisi desain (FR-SYS-01 #2, belum dibangun).
 - **Rute contoh sinkronisasi ditentukan `--tujuan`, bukan asal = tujuan**: `service` hanya keluar per rute, dan rute dalam satu kecamatan hanya memberi `CTC`/`JTR*`, bukan `REG`/`YES`. Tanpa `--tujuan` perintah tetap berjalan (perilaku lama) tetapi memberi peringatan, supaya alasan hasilnya tidak mewakili layanan antar kota terlihat langsung, bukan baru ketahuan setelah tabel terisi.

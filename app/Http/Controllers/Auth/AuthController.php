@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Mail\Auth\ResetPasswordMail;
 use App\Models\Auth\User;
 use App\Rules\NomorTelepon;
+use App\Support\BatasPermintaan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -34,8 +35,6 @@ class AuthController extends Controller
 
     /** Satu aturan email untuk semua endpoint, supaya tidak ada yang tertinggal. */
     private const ATURAN_EMAIL = 'required|string|email|max:255';
-
-    private const PESAN_TERLALU_BANYAK = 'Terlalu banyak permintaan, coba lagi beberapa saat lagi';
 
     private const PESAN_TAUTAN_VERIFIKASI_TIDAK_VALID = 'Tautan verifikasi tidak valid';
 
@@ -309,7 +308,7 @@ class AuthController extends Controller
     /** Satu bentuk balasan 429 untuk semua pembatas percobaan. */
     private function terlaluBanyak(): JsonResponse
     {
-        return response()->json(['message' => self::PESAN_TERLALU_BANYAK], 429);
+        return response()->json(['message' => BatasPermintaan::PESAN], 429);
     }
 
     /** Hash email salah dan token salah harus dijawab sama persis. */
