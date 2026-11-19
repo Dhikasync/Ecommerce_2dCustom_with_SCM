@@ -2,9 +2,11 @@
 
 use App\Http\Middleware\Auth\EnsureUserHasRole;
 use App\Http\Middleware\Auth\EnsureUserIsActive;
+use App\Support\BatasPermintaan;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Exceptions\InvalidSignatureException;
 use Illuminate\Session\Middleware\AuthenticateSession;
@@ -59,5 +61,14 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response()->json(['message' => 'Tautan verifikasi tidak valid'], 403);
+        });
+
+        // NFR-LOC-01: middleware `throttle` melempar pesan Inggris
+        // ("Too Many Attempts.") tanpa sisa waktu tunggu. Diterjemahkan di satu
+        // tempat ini supaya semua route yang dibatasi bicara sama.
+        $exceptions->render(function (ThrottleRequestsException $e, Request $request) {
+            $headers = $e->getHeaders();
+
+            return BatasPermintaan::respons((int) ($headers['Retry-After'] ?? 0), $headers);
         });
     })->create();
