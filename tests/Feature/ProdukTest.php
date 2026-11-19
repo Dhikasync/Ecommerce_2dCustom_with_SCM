@@ -153,7 +153,7 @@ class ProdukTest extends TestCase
 
     public function test_produk_custom_selalu_tersimpan_nonaktif(): void
     {
-        $data = $this->dataProduk(['tipe' => 'custom', 'is_aktif' => true]);
+        $data = $this->dataProduk(['tipe' => 'custom', 'is_aktif' => true, 'sla_hari' => 7]);
 
         $this->actingAs($this->adminEcommerce())
             ->postJson('/admin/produk', $data)
@@ -304,6 +304,7 @@ class ProdukTest extends TestCase
                 'deskripsi' => 'Deskripsi baru',
                 'tipe' => 'custom',
                 'harga_dasar' => 150000,
+                'sla_hari' => 7,
             ])
             ->assertOk()
             ->assertJsonPath('data.nama', 'Tas Rotan Custom Baru')
@@ -324,6 +325,7 @@ class ProdukTest extends TestCase
                 'tipe' => 'custom',
                 'harga_dasar' => $produk->harga_dasar,
                 'is_aktif' => true,
+                'sla_hari' => 7,
             ])
             ->assertOk()
             ->assertJsonPath('data.tipe', 'custom')
@@ -348,6 +350,7 @@ class ProdukTest extends TestCase
                 'tipe' => 'custom',
                 'harga_dasar' => $produk->harga_dasar,
                 'is_aktif' => false,
+                'sla_hari' => 7,
             ])
             ->assertOk()
             ->assertJsonPath('data.is_aktif', false);
@@ -589,5 +592,75 @@ class ProdukTest extends TestCase
     public function test_guest_harus_login_dulu(): void
     {
         $this->getJson('/admin/produk')->assertStatus(401);
+    }
+
+    // ---------- FR-CDSN-07: SLA produksi produk custom ----------
+
+    public function test_sla_tersimpan_untuk_produk_custom(): void
+    {
+        $this->actingAs($this->adminEcommerce())
+            ->postJson('/admin/produk', $this->dataProduk([
+                'tipe' => 'custom',
+                'sla_hari' => 5,
+            ]))
+            ->assertCreated()
+            ->assertJsonPath('data.tipe', 'custom')
+            ->assertJsonPath('data.sla_hari', 5);
+
+        $this->assertDatabaseHas('products', ['tipe' => 'custom', 'sla_hari' => 5]);
+    }
+
+    /** FR-CDSN-07 #2: kosong, 0, negatif, dan bukan angka dijawab pesan yang sama. */
+    public function test_sla_kosong_ditolak_untuk_produk_custom(): void
+    {
+        foreach ([null, '', 0, -3, 'lima'] as $nilai) {
+            $this->actingAs($this->adminEcommerce())
+                ->postJson('/admin/produk', $this->dataProduk([
+                    'tipe' => 'custom',
+                    'sla_hari' => $nilai,
+                ]))
+                ->assertStatus(422)
+                ->assertJsonValidationErrors('sla_hari')
+                ->assertJsonPath(
+                    'errors.sla_hari.0',
+                    'Estimasi waktu produksi wajib berupa angka hari kerja minimal 1',
+                );
+        }
+
+        $this->assertSame(0, Product::where('tipe', 'custom')->count());
+    }
+
+    public function test_sla_produk_jadi_tidak_disimpan(): void
+    {
+        $this->actingAs($this->adminEcommerce())
+            ->postJson('/admin/produk', $this->dataProduk([
+                'tipe' => 'jadi',
+                'sla_hari' => 5,
+            ]))
+            ->assertCreated()
+            ->assertJsonPath('data.sla_hari', null);
+    }
+
+    /** FR-CDSN-07 #3: pesanan berjalan memakai salinan SLA saat checkout. */
+    public function test_perubahan_sla_tidak_mengubah_pesanan_berjalan(): void
+    {
+        $produk = Product::create($this->dataProduk([
+            'tipe' => 'custom',
+            'sla_hari' => 3,
+            'is_aktif' => true,
+        ]));
+        $item = $this->pesananUntuk($produk, 'menunggu_validasi');
+        $item->update(['sla_hari' => 3]);
+
+        $this->actingAs($this->adminEcommerce())
+            ->putJson('/admin/produk/'.$produk->id, $this->dataProduk([
+                'tipe' => 'custom',
+                'sla_hari' => 9,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.sla_hari', 9);
+
+        $this->assertSame(9, $produk->refresh()->sla_hari);
+        $this->assertSame(3, $item->refresh()->sla_hari);
     }
 }

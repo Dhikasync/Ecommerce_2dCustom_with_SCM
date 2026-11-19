@@ -182,13 +182,29 @@ class ProductController extends Controller
             'harga_dasar' => ['required', 'integer', 'min:0'],
             'is_aktif' => ['sometimes', 'boolean'],
 
+            // FR-CDSN-07 #1/#2: SLA hanya untuk custom, bilangan bulat hari kerja.
+            'sla_hari' => ['required_if:tipe,custom', 'nullable', 'integer', 'min:1'],
+
             'gambar' => ['sometimes', 'array'],
             // max:2048 kilobyte = 2 MB (NFR-FIL-01).
             'gambar.*' => ['file', 'mimes:jpg,jpeg,png', 'max:2048'],
+        ], [
+            // FR-CDSN-07 #2: dokumen memakai satu kalimat untuk semua bentuk
+            // nilai salah, jadi `required_if`, `integer`, dan `min` sama bunyinya.
+            ...array_fill_keys(
+                ['sla_hari.required_if', 'sla_hari.integer', 'sla_hari.min'],
+                'Estimasi waktu produksi wajib berupa angka hari kerja minimal 1',
+            ),
         ]);
 
         // `gambar` berisi UploadedFile, bukan kolom database.
         unset($data['gambar']);
+
+        // Produk jadi tidak punya produksi custom, jadi SLA tidak boleh
+        // tertinggal dari kiriman form yang salah.
+        if ($data['tipe'] === 'jadi') {
+            $data['sla_hari'] = null;
+        }
 
         // Custom baru atau produk yang baru diubah menjadi custom tetap
         // Nonaktif. Custom yang sudah aktif dibiarkan, supaya mengubah nama
