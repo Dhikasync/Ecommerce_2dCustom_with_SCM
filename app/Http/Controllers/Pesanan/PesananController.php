@@ -15,6 +15,8 @@ use Illuminate\Validation\Rule;
  */
 class PesananController extends Controller
 {
+    private const PESAN_TIDAK_DITEMUKAN = 'Pesanan tidak ditemukan';
+
     /**
      * FR-ORDR-01 #1: daftar pesanan dengan filter status pesanan. Sembilan
      * nilai yang boleh datang dari Lampiran B, bukan daftar karangan.
@@ -38,5 +40,25 @@ class PesananController extends Controller
         return response()->json([
             'data' => $daftar->map(fn (Order $pesanan) => RingkasanPesanan::untukDaftar($pesanan))->all(),
         ]);
+    }
+
+    /**
+     * FR-ORDR-01 #2: detail terpisah — status pesanan, pembayaran, dan desain,
+     * ditambah item, alamat, kurir, dan riwayat status.
+     */
+    public function show(Request $request, string $nomor): JsonResponse
+    {
+        $pesanan = Order::query()
+            ->where('nomor_pesanan', $nomor)
+            // NFR-SEC-03: nomor pesanan User lain dijawab seperti nomor asing.
+            ->where('user_id', $request->user()->id)
+            ->with(['orderItems.design', 'latestPayment', 'courier', 'statusHistories.changedBy'])
+            ->first();
+
+        if (! $pesanan) {
+            return response()->json(['message' => self::PESAN_TIDAK_DITEMUKAN], 404);
+        }
+
+        return response()->json(['data' => RingkasanPesanan::untukDetail($pesanan)]);
     }
 }

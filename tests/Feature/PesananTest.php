@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Auth\User;
+use App\Models\Courier;
 use App\Models\Design;
 use App\Models\Order;
+use App\Models\OrderStatusHistory;
 use App\Models\Payment;
 use App\Models\Produk\Category;
 use App\Models\Produk\Product;
@@ -210,5 +212,148 @@ class PesananTest extends TestCase
     public function test_daftar_menolak_tamu(): void
     {
         $this->getJson('/pesanan')->assertStatus(401);
+    }
+
+    private function kurir(): Courier
+    {
+        return Courier::create([
+            'kode' => 'JNE',
+            'nama' => 'JNE',
+            'layanan' => 'REG',
+            'is_aktif' => true,
+        ]);
+    }
+
+    /** FR-ORDR-01 #2: status pesanan, pembayaran, desain, item, alamat, kurir, riwayat. */
+    public function test_detail_menampilkan_status_item_alamat_kurir_dan_riwayat(): void
+    {
+        $kurir = $this->kurir();
+        $pesanan = $this->pesanan([
+            'status' => 'diproses',
+            'courier_id' => $kurir->id,
+            'label_lokasi' => 'Rumah',
+        ]);
+        $this->tagihan($pesanan, 'lunas');
+
+        OrderStatusHistory::create([
+            'order_id' => $pesanan->id,
+            'status_lama' => null,
+            'status_baru' => 'menunggu_pembayaran',
+            'diubah_oleh' => $this->user->id,
+        ]);
+        OrderStatusHistory::create([
+            'order_id' => $pesanan->id,
+            'status_lama' => 'menunggu_pembayaran',
+            'status_baru' => 'diproses',
+            'diubah_oleh' => null,
+            'catatan' => 'Pembayaran diterima',
+        ]);
+
+        $this->actingAs($this->user)
+            ->getJson('/pesanan/'.$pesanan->nomor_pesanan)
+            ->assertOk()
+            ->assertJsonPath('data.nomor_pesanan', $pesanan->nomor_pesanan)
+            ->assertJsonPath('data.status', 'diproses')
+            ->assertJsonPath('data.status_pembayaran', 'lunas')
+            ->assertJsonPath('data.status_desain', 'tidak_ada')
+            ->assertJsonPath('data.subtotal_barang', 40000)
+            ->assertJsonPath('data.ongkir', 8000)
+            ->assertJsonPath('data.total', 48000)
+            ->assertJsonPath('data.item.0.nama_produk', 'Tote Bag')
+            ->assertJsonPath('data.item.0.quantity', 2)
+            ->assertJsonPath('data.item.0.harga_satuan', 20000)
+            ->assertJsonPath('data.item.0.subtotal', 40000)
+            ->assertJsonPath('data.item.0.is_custom', false)
+            ->assertJsonPath('data.item.0.desain', null)
+            ->assertJsonPath('data.alamat.nama_penerima', 'Andhi')
+            ->assertJsonPath('data.alamat.alamat_pengiriman', 'Jl. Sumur Bandung No. 1')
+            ->assertJsonPath('data.alamat.label_lokasi', 'Rumah')
+            ->assertJsonPath('data.kurir.nama', 'JNE')
+            ->assertJsonPath('data.kurir.layanan', 'REG')
+            ->assertJsonCount(2, 'data.riwayat')
+            ->assertJsonPath('data.riwayat.0.status_lama', null)
+            ->assertJsonPath('data.riwayat.0.status_baru', 'menunggu_pembayaran')
+            ->assertJsonPath('data.riwayat.0.oleh', $this->user->name)
+            ->assertJsonPath('data.riwayat.1.status_baru', 'diproses')
+            ->assertJsonPath('data.riwayat.1.oleh', 'Sistem')
+            ->assertJsonPath('data.riwayat.1.catatan', 'Pembayaran diterima');
+    }
+
+    /** FR-PROD-01 #5: harga dan nama item adalah salinan saat pesanan dibentuk. */
+    public function test_detail_memakai_harga_saat_pesanan_dibentuk(): void
+    {
+        $pesanan = $this->pesanan();
+        $pesanan->orderItems()->firstOrFail()->variant->update(['harga' => 99000]);
+
+        $this->actingAs($this->user)
+            ->getJson('/pesanan/'.$pesanan->nomor_pesanan)
+            ->assertOk()
+            ->assertJsonPath('data.item.0.harga_satuan', 20000)
+            ->assertJsonPath('data.item.0.subtotal', 40000);
+    }
+
+    public function test_detail_pesanan_custom_membawa_status_desain_per_item(): void
+    {
+        $pesanan = $this->pesanan(['status' => 'menunggu_validasi'], null, $this->varian('custom'));
+        $this->desain($pesanan, 'menunggu_validasi');
+
+        $this->actingAs($this->user)
+            ->getJson('/pesanan/'.$pesanan->nomor_pesanan)
+            ->assertOk()
+            ->assertJsonPath('data.status_desain', 'menunggu_validasi')
+            ->assertJsonPath('data.item.0.is_custom', true)
+            ->assertJsonPath('data.item.0.desain.status', 'menunggu_validasi')
+            ->assertJsonPath('data.item.0.desain.preview', url('/storage/desain/preview.png'));
+    }
+
+    public function test_detail_pesanan_dibatalkan_membawa_alasan(): void
+    {
+        $pesanan = $this->pesanan([
+            'status' => 'dibatalkan',
+            'alasan_pembatalan' => 'Batas pembayaran 24 jam terlewat',
+        ]);
+
+        $this->actingAs($this->user)
+            ->getJson('/pesanan/'.$pesanan->nomor_pesanan)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'dibatalkan')
+            ->assertJsonPath('data.alasan_pembatalan', 'Batas pembayaran 24 jam terlewat');
+    }
+
+    /** Pesanan lama bisa saja belum punya riwayat; itu bukan galat. */
+    public function test_detail_tanpa_riwayat_dijawab_200_dengan_larik_kosong(): void
+    {
+        $pesanan = $this->pesanan();
+
+        $this->actingAs($this->user)
+            ->getJson('/pesanan/'.$pesanan->nomor_pesanan)
+            ->assertOk()
+            ->assertJsonCount(0, 'data.riwayat');
+    }
+
+    /** NFR-SEC-03: pesanan User lain dijawab sama seperti pesanan yang tidak ada. */
+    public function test_detail_pesanan_user_lain_dijawab_404(): void
+    {
+        $milikOrangLain = $this->pesanan([], User::factory()->create());
+
+        $this->actingAs($this->user)
+            ->getJson('/pesanan/'.$milikOrangLain->nomor_pesanan)
+            ->assertStatus(404)
+            ->assertJson(['message' => 'Pesanan tidak ditemukan']);
+    }
+
+    public function test_detail_nomor_tidak_dikenal_dijawab_404(): void
+    {
+        $this->actingAs($this->user)
+            ->getJson('/pesanan/INV-TIDAK-ADA')
+            ->assertStatus(404)
+            ->assertJson(['message' => 'Pesanan tidak ditemukan']);
+    }
+
+    public function test_detail_menolak_tamu(): void
+    {
+        $pesanan = $this->pesanan();
+
+        $this->getJson('/pesanan/'.$pesanan->nomor_pesanan)->assertStatus(401);
     }
 }

@@ -3,6 +3,8 @@
 namespace App\Support;
 
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\OrderStatusHistory;
 
 /**
  * FR-ORDR-01 #1/#2, Lampiran B: tiga domain status yang dipisah dokumen —
@@ -47,5 +49,64 @@ class RingkasanPesanan
             'dibuat_pada' => $pesanan->created_at?->toIso8601String(),
             'kadaluwarsa_pada' => $pesanan->kadaluwarsa_pada?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Detail satu pesanan (FR-ORDR-01 #2, user-story.md:569). Item memakai
+     * salinan nama/harga saat pesanan dibentuk (FR-PROD-01 #5), bukan harga
+     * produk sekarang.
+     *
+     * @return array<string, mixed>
+     */
+    public static function untukDetail(Order $pesanan): array
+    {
+        return array_merge(self::untukDaftar($pesanan), [
+            'subtotal_barang' => $pesanan->subtotal_barang,
+            'ongkir' => $pesanan->ongkir,
+            'diskon_voucher' => $pesanan->diskon_voucher,
+            'item' => $pesanan->orderItems->map(fn (OrderItem $item) => [
+                'id' => $item->id,
+                'nama_produk' => $item->nama_produk,
+                'nama_varian' => $item->nama_varian,
+                'sku' => $item->sku,
+                'quantity' => $item->quantity,
+                'harga_satuan' => $item->harga_satuan,
+                'subtotal' => $item->harga_satuan * $item->quantity,
+                'is_custom' => $item->design_id !== null,
+                'sla_hari' => $item->sla_hari,
+                'desain' => $item->design === null ? null : [
+                    'id' => $item->design->id,
+                    'status' => $item->design->status,
+                    'versi' => $item->design->versi,
+                    'preview' => GambarPublik::url($item->design->preview_gambar),
+                ],
+            ])->all(),
+            // Salinan alamat saat checkout: tetap terbaca walau alamat dihapus
+            // (FR-CKOT-01 #2).
+            'alamat' => [
+                'nama_penerima' => $pesanan->nama_penerima,
+                'no_hp' => $pesanan->no_hp,
+                'alamat_pengiriman' => $pesanan->alamat_pengiriman,
+                'label_lokasi' => $pesanan->label_lokasi,
+            ],
+            'kurir' => $pesanan->courier === null ? null : [
+                'kode' => $pesanan->courier->kode,
+                'nama' => $pesanan->courier->nama,
+                'layanan' => $pesanan->courier->layanan,
+            ],
+            'dikirim_pada' => $pesanan->dikirim_pada?->toIso8601String(),
+            'selesai_pada' => $pesanan->selesai_pada?->toIso8601String(),
+            'riwayat' => $pesanan->statusHistories
+                ->sortBy('id')
+                ->values()
+                ->map(fn (OrderStatusHistory $baris) => [
+                    'status_lama' => $baris->status_lama,
+                    'status_baru' => $baris->status_baru,
+                    // Perubahan oleh gateway tidak punya pelaku User/Admin.
+                    'oleh' => $baris->changedBy?->name ?? 'Sistem',
+                    'catatan' => $baris->catatan,
+                    'waktu' => $baris->created_at?->toIso8601String(),
+                ])->all(),
+        ]);
     }
 }
