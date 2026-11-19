@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 /**
  * FR-PROD-01, UC-09: Admin Ecommerce mengelola produk jadi dan custom.
@@ -206,16 +207,48 @@ class ProductController extends Controller
             $data['sla_hari'] = null;
         }
 
-        // Custom baru atau produk yang baru diubah menjadi custom tetap
-        // Nonaktif. Custom yang sudah aktif dibiarkan, supaya mengubah nama
-        // atau harganya tidak menurunkan produk dari katalog.
-        $customYangSudahAktif = $produk?->tipe === 'custom' && $produk->is_aktif;
+        // FR-CDSN-07 #4: permintaan aktivasi produk custom diperiksa
+        // kelengkapannya. Tanpa permintaan, custom baru lahir Nonaktif dan
+        // custom yang sudah aktif dibiarkan (mengubah nama/harga tidak
+        // menurunkannya dari katalog).
+        if ($data['tipe'] === 'custom') {
+            $sudahAktif = $produk?->tipe === 'custom' && $produk->is_aktif;
 
-        if ($data['tipe'] === 'custom' && ! $customYangSudahAktif) {
-            $data['is_aktif'] = false;
+            if (! array_key_exists('is_aktif', $data)) {
+                $data['is_aktif'] = $sudahAktif;
+            } elseif ($data['is_aktif']) {
+                $this->pastikanLengkapUntukAktif($data, $produk);
+            }
         }
 
         return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function pastikanLengkapUntukAktif(array $data, ?Product $produk): void
+    {
+        $kurang = [];
+
+        if (($data['sla_hari'] ?? $produk?->sla_hari) === null) {
+            $kurang[] = 'SLA';
+        }
+
+        $punyaTemplate = $produk !== null
+            && $produk->templates()->where('is_aktif', true)->exists();
+
+        if (! $punyaTemplate) {
+            $kurang[] = 'template desain';
+        }
+
+        if ($kurang === []) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'is_aktif' => 'Produk custom belum lengkap: '.implode(', ', $kurang),
+        ]);
     }
 
     /**

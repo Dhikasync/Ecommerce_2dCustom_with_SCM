@@ -8,6 +8,7 @@ use App\Models\OrderItem;
 use App\Models\Produk\Category;
 use App\Models\Produk\Product;
 use App\Models\Produk\Variant;
+use App\Models\Template;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -151,9 +152,9 @@ class ProdukTest extends TestCase
             ->assertJsonPath('data.is_aktif', false);
     }
 
-    public function test_produk_custom_selalu_tersimpan_nonaktif(): void
+    public function test_produk_custom_baru_tetap_nonaktif(): void
     {
-        $data = $this->dataProduk(['tipe' => 'custom', 'is_aktif' => true, 'sla_hari' => 7]);
+        $data = $this->dataProduk(['tipe' => 'custom', 'sla_hari' => 7]);
 
         $this->actingAs($this->adminEcommerce())
             ->postJson('/admin/produk', $data)
@@ -324,7 +325,7 @@ class ProdukTest extends TestCase
                 'deskripsi' => $produk->deskripsi,
                 'tipe' => 'custom',
                 'harga_dasar' => $produk->harga_dasar,
-                'is_aktif' => true,
+                'is_aktif' => false,
                 'sla_hari' => 7,
             ])
             ->assertOk()
@@ -662,5 +663,118 @@ class ProdukTest extends TestCase
 
         $this->assertSame(9, $produk->refresh()->sla_hari);
         $this->assertSame(3, $item->refresh()->sla_hari);
+    }
+
+    // ---------- FR-CDSN-07 #4: produk custom wajib lengkap sebelum aktif ----------
+
+    private function templateUntuk(Product $produk, bool $aktif = true): Template
+    {
+        return Template::create([
+            'product_id' => $produk->id,
+            'nama' => 'Template '.$produk->id,
+            'file' => 'template/'.$produk->id.'.png',
+            'lebar_kanvas' => 800,
+            'tinggi_kanvas' => 600,
+            'is_aktif' => $aktif,
+        ]);
+    }
+
+    public function test_produk_custom_tanpa_template_tidak_bisa_diaktifkan(): void
+    {
+        $produk = Product::create($this->dataProduk([
+            'tipe' => 'custom',
+            'sla_hari' => 7,
+            'is_aktif' => false,
+        ]));
+
+        $this->actingAs($this->adminEcommerce())
+            ->putJson('/admin/produk/'.$produk->id, $this->dataProduk([
+                'tipe' => 'custom',
+                'sla_hari' => 7,
+                'is_aktif' => true,
+            ]))
+            ->assertStatus(422)
+            ->assertJsonPath('errors.is_aktif.0', 'Produk custom belum lengkap: template desain');
+
+        $this->assertFalse($produk->refresh()->is_aktif);
+    }
+
+    public function test_produk_custom_tidak_bisa_langsung_aktif_saat_dibuat(): void
+    {
+        $this->actingAs($this->adminEcommerce())
+            ->postJson('/admin/produk', $this->dataProduk([
+                'tipe' => 'custom',
+                'sla_hari' => 7,
+                'is_aktif' => true,
+            ]))
+            ->assertStatus(422)
+            ->assertJsonPath('errors.is_aktif.0', 'Produk custom belum lengkap: template desain');
+
+        $this->assertSame(0, Product::where('tipe', 'custom')->count());
+    }
+
+    public function test_produk_custom_dengan_template_aktif_bisa_diaktifkan(): void
+    {
+        $produk = Product::create($this->dataProduk([
+            'tipe' => 'custom',
+            'sla_hari' => 7,
+            'is_aktif' => false,
+        ]));
+        $this->templateUntuk($produk);
+
+        $this->actingAs($this->adminEcommerce())
+            ->putJson('/admin/produk/'.$produk->id, $this->dataProduk([
+                'tipe' => 'custom',
+                'sla_hari' => 7,
+                'is_aktif' => true,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.is_aktif', true);
+
+        $this->assertDatabaseHas('products', ['id' => $produk->id, 'is_aktif' => true]);
+    }
+
+    public function test_template_nonaktif_belum_dihitung_lengkap(): void
+    {
+        $produk = Product::create($this->dataProduk([
+            'tipe' => 'custom',
+            'sla_hari' => 7,
+            'is_aktif' => false,
+        ]));
+        $this->templateUntuk($produk, aktif: false);
+
+        $this->actingAs($this->adminEcommerce())
+            ->putJson('/admin/produk/'.$produk->id, $this->dataProduk([
+                'tipe' => 'custom',
+                'sla_hari' => 7,
+                'is_aktif' => true,
+            ]))
+            ->assertStatus(422)
+            ->assertJsonPath('errors.is_aktif.0', 'Produk custom belum lengkap: template desain');
+    }
+
+    /** FR-CDSN-07 #4 menyebut "SLA" sebagai kelengkapan yang bisa kurang. */
+    public function test_aktivasi_custom_tanpa_sla_ditolak_dengan_pesan_sla(): void
+    {
+        $produk = Product::create($this->dataProduk([
+            'tipe' => 'custom',
+            'sla_hari' => 7,
+            'is_aktif' => false,
+        ]));
+        $this->templateUntuk($produk);
+
+        $this->actingAs($this->adminEcommerce())
+            ->putJson('/admin/produk/'.$produk->id, $this->dataProduk([
+                'tipe' => 'custom',
+                'sla_hari' => null,
+                'is_aktif' => true,
+            ]))
+            ->assertStatus(422)
+            ->assertJsonPath(
+                'errors.sla_hari.0',
+                'Estimasi waktu produksi wajib berupa angka hari kerja minimal 1',
+            );
+
+        $this->assertFalse($produk->refresh()->is_aktif);
     }
 }
