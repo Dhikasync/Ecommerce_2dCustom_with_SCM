@@ -242,7 +242,7 @@ class NotifikasiPembayaranTest extends TestCase
 
     // ---------- Skenario #3: pembayaran gagal ----------
 
-    public function test_deny_menjadikan_pembayaran_gagal_tanpa_notifikasi(): void
+    public function test_deny_menjadikan_pembayaran_gagal_dan_memberi_kabar(): void
     {
         ['pesanan' => $pesanan, 'pembayaran' => $pembayaran, 'varian' => $varian] = $this->pesanan();
 
@@ -254,8 +254,29 @@ class NotifikasiPembayaranTest extends TestCase
         $this->assertSame('menunggu_pembayaran', $pesanan->refresh()->status);
         // Reservasi tetap dipegang supaya User dapat mencoba metode lain.
         $this->assertSame(2, $varian->refresh()->stok_direservasi);
-        $this->assertSame(0, Notification::count());
-        Mail::assertNothingSent();
+
+        // FR-ORDR-01 #3: perubahan status pembayaran dikabarkan lewat in-app + email.
+        $kabar = Notification::where('user_id', $this->user->id)->sole();
+        $this->assertSame('Pembayaran gagal', $kabar->judul);
+        $this->assertSame('pembayaran', $kabar->tipe);
+        $this->assertStringContainsString($pesanan->nomor_pesanan, $kabar->pesan);
+        $this->assertStringContainsString('menunggu pembayaran', $kabar->pesan);
+        $this->assertStringContainsString('WIB', $kabar->pesan);
+
+        Mail::assertSent(PembayaranMail::class, 1);
+        Mail::assertSent(PembayaranMail::class, fn (PembayaranMail $mail) => $mail->hasTo($this->user->email));
+    }
+
+    /** FR-SYS-01 #7: percobaan gagal berulang tidak mengirim kabar berulang. */
+    public function test_kabar_gagal_hanya_dikirim_sekali(): void
+    {
+        $this->pesanan();
+
+        $this->kirim(['transaction_status' => 'deny'])->assertOk();
+        $this->kirim(['transaction_status' => 'deny'])->assertOk();
+
+        $this->assertSame(1, Notification::where('user_id', $this->user->id)->count());
+        Mail::assertSent(PembayaranMail::class, 1);
     }
 
     // ---------- Skenario #4: kedaluwarsa ----------

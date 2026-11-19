@@ -15,14 +15,15 @@ use Throwable;
 class KabarPembayaran
 {
     /**
-     * Hanya dua keadaan yang wajib dikabarkan: Lunas (#2) dan kedaluwarsa (#4).
-     * Kabar untuk `gagal` diwajibkan FR-ORDR-01 #3, tetapi ditunda sampai modul
-     * itu dibangun; lihat README "Keputusan di luar dokumen".
+     * FR-ORDR-01 #3: setiap perubahan status pembayaran dikabarkan lewat dua
+     * kanal dokumen — in-app dan email. `pending` tidak mengubah apa pun,
+     * sehingga tidak perlu dikabarkan.
      */
     public function kirim(Order $pesanan, string $statusPembayaran): void
     {
         [$judul, $pesan] = match ($statusPembayaran) {
             'lunas' => ['Pembayaran diterima', $this->pesanLunas($pesanan)],
+            'gagal' => ['Pembayaran gagal', $this->pesanGagal($pesanan)],
             'kedaluwarsa' => [
                 'Pesanan dibatalkan',
                 'Pesanan '.$pesanan->nomor_pesanan.' dibatalkan karena batas pembayaran lewat. Stok yang sempat direservasi sudah dilepas.',
@@ -62,5 +63,27 @@ class KabarPembayaran
         }
 
         return 'Pembayaran pesanan '.$pesanan->nomor_pesanan.' sudah kami terima. Pesanan sedang diproses.';
+    }
+
+    /**
+     * FR-PAYM-01 #3, FR-ORDR-01 #3: percobaan yang ditolak gateway tidak
+     * membatalkan pesanan, jadi kabar ini menegaskan pesanan masih hidup dan
+     * menyebut batas waktunya dalam WIB (NFR-LOC-01).
+     */
+    private function pesanGagal(Order $pesanan): string
+    {
+        $awal = 'Pembayaran pesanan '.$pesanan->nomor_pesanan.' belum berhasil. ';
+
+        // Pesanan custom belum punya batas bayar sebelum desain disetujui
+        // (FR-PAYM-02), jadi jangan menjanjikan tanggal yang tidak ada.
+        $batas = $pesanan->kadaluwarsa_pada?->copy()->timezone('Asia/Jakarta');
+
+        if ($batas === null) {
+            return $awal.'Silakan coba lagi dengan metode pembayaran lain.';
+        }
+
+        return $awal.'Pesanan masih menunggu pembayaran sampai '
+            .$batas->translatedFormat('j F Y, H.i').' WIB. '
+            .'Silakan coba lagi dengan metode pembayaran lain.';
     }
 }
