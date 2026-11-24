@@ -9,6 +9,7 @@
  *   dan pesanan). Berkas dipisah per token sesi.
  */
 
+use App\Http\Controllers\Desain\DesainController;
 use App\Http\Controllers\Desain\TemplateController;
 use App\Http\Controllers\Desain\UnggahanController;
 use Illuminate\Support\Facades\Route;
@@ -39,3 +40,22 @@ Route::post('/desain/unggahan', [UnggahanController::class, 'simpan'])
 
 Route::delete('/desain/unggahan/{nama}', [UnggahanController::class, 'hapus'])
     ->name('unggahan.destroy');
+
+// FR-CDSN-02 #1/#9/#10: draft desain milik User. Login wajib karena draft
+// menempel ke `designs.user_id`; Guest tetap boleh mengustomisasi tanpa
+// menyimpan (editor memuat template lewat langkah FR-CDSN-02 #1 berikutnya).
+Route::middleware(['auth', 'active'])->group(function () {
+    Route::get('/desain', [DesainController::class, 'daftar'])
+        ->name('desain.index');
+
+    Route::post('/desain', [DesainController::class, 'simpan'])
+        ->name('desain.store');
+
+    Route::get('/desain/{id}', [DesainController::class, 'tampil'])
+        ->whereNumber('id')
+        ->name('desain.show');
+
+    Route::put('/desain/{id}', [DesainController::class, 'ubah'])
+        ->whereNumber('id')
+        ->name('desain.update');
+});

@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Desain;
 
 use App\Http\Controllers\Controller;
 use App\Support\GambarPublik;
+use App\Support\UnggahanDesain;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 /**
  * FR-CDSN-03 #1-#5, NFR-FIL-03: gambar unggahan User (logo/foto) untuk kanvas
@@ -18,10 +18,6 @@ use Illuminate\Support\Str;
 class UnggahanController extends Controller
 {
     private const DISK = 'public';
-
-    private const FOLDER = 'desain/unggahan';
-
-    private const KUNCI_PEMILIK = 'desain_unggah_owner';
 
     private const PESAN_UNGGAH = 'Gambar berhasil diunggah';
 
@@ -42,7 +38,7 @@ class UnggahanController extends Controller
 
     public function daftar(Request $request): JsonResponse
     {
-        $data = collect(Storage::disk(self::DISK)->files($this->folder($request)))
+        $data = collect(Storage::disk(self::DISK)->files(UnggahanDesain::folder($request)))
             ->map(fn (string $berkas) => $this->ringkas($berkas))
             ->values();
 
@@ -61,7 +57,7 @@ class UnggahanController extends Controller
             'file.max' => self::PESAN_UKURAN,
         ]);
 
-        $berkas = $request->file('file')->store($this->folder($request), self::DISK);
+        $berkas = $request->file('file')->store(UnggahanDesain::folder($request), self::DISK);
 
         return response()->json([
             'message' => self::PESAN_UNGGAH,
@@ -74,7 +70,7 @@ class UnggahanController extends Controller
     {
         // Nama dari URL dipotong jadi basename supaya `..` tidak bisa keluar
         // dari folder pemilik.
-        $berkas = $this->folder($request).'/'.basename($nama);
+        $berkas = UnggahanDesain::folder($request).'/'.basename($nama);
 
         if (! Storage::disk(self::DISK)->exists($berkas)) {
             return response()->json(['message' => self::PESAN_TIDAK_DITEMUKAN], 404);
@@ -83,23 +79,6 @@ class UnggahanController extends Controller
         Storage::disk(self::DISK)->delete($berkas);
 
         return response()->json(['message' => self::PESAN_HAPUS]);
-    }
-
-    /**
-     * Token pemilik ada di sesi, bukan di akun: Guest boleh mengustomisasi
-     * (user-story.md:834 hanya membatasi keranjang, checkout, dan pesanan),
-     * dan token bertahan saat sesi di-regenerate ketika Guest login.
-     */
-    private function folder(Request $request): string
-    {
-        $pemilik = $request->session()->get(self::KUNCI_PEMILIK);
-
-        if (! is_string($pemilik) || $pemilik === '') {
-            $pemilik = (string) Str::uuid();
-            $request->session()->put(self::KUNCI_PEMILIK, $pemilik);
-        }
-
-        return self::FOLDER.'/'.$pemilik;
     }
 
     /**
