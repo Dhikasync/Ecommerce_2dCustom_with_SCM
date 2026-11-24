@@ -41,6 +41,13 @@ Route::post('/desain/unggahan', [UnggahanController::class, 'simpan'])
 Route::delete('/desain/unggahan/{nama}', [UnggahanController::class, 'hapus'])
     ->name('unggahan.destroy');
 
+// FR-CDSN-02 #1/#10: pembuka editor dari halaman detail produk. Publik
+// karena editor boleh dibuka Guest (user-story.md:834); draft hanya ikut
+// bila request membawa sesi User yang login.
+Route::get('/desain/editor/{product}', [DesainController::class, 'editor'])
+    ->whereNumber('product')
+    ->name('desain.editor');
+
 // FR-CDSN-02 #1/#9/#10: draft desain milik User. Login wajib karena draft
 // menempel ke `designs.user_id`; Guest tetap boleh mengustomisasi tanpa
 // menyimpan (editor memuat template lewat langkah FR-CDSN-02 #1 berikutnya).

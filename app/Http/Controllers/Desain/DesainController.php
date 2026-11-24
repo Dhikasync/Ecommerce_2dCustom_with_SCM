@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Desain;
 
 use App\Http\Controllers\Controller;
 use App\Models\Design;
+use App\Models\Produk\Product;
 use App\Models\Produk\Variant;
 use App\Models\Template;
 use App\Support\GambarPublik;
@@ -54,6 +55,65 @@ class DesainController extends Controller
         }
 
         return response()->json(['data' => $this->ringkas($desain, denganData: true)]);
+    }
+
+    /**
+     * FR-CDSN-02 #1/#10: pembuka editor dari halaman detail produk. Publik
+     * supaya Guest boleh mengustomisasi; draft hanya disertakan bila User
+     * sudah login dan pernah menyimpannya untuk template ini.
+     */
+    public function editor(Request $request, int $product): JsonResponse
+    {
+        $produk = Product::find($product);
+
+        if ($produk === null) {
+            return response()->json(['message' => 'Produk tidak ditemukan'], 404);
+        }
+
+        if (! $produk->isCustom()) {
+            return response()->json(['message' => 'Editor hanya tersedia untuk produk custom'], 422);
+        }
+
+        $diminta = $request->integer('template_id');
+
+        if ($diminta > 0) {
+            $template = $produk->templates()
+                ->whereKey($diminta)
+                ->where('is_aktif', true)
+                ->first();
+
+            if ($template === null) {
+                return response()->json(['message' => 'Template desain tidak tersedia'], 422);
+            }
+        } else {
+            $template = $produk->templates()
+                ->where('is_aktif', true)
+                ->orderBy('id')
+                ->first();
+
+            if ($template === null) {
+                return response()->json(['message' => 'Produk custom belum punya template desain aktif'], 422);
+            }
+        }
+
+        $draft = $request->user() === null ? null : Design::query()
+            ->where('user_id', $request->user()->id)
+            ->where('template_id', $template->id)
+            ->whereIn('status', self::STATUS_BISA_DIUBAH)
+            ->with('template')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->first();
+
+        return response()->json(['data' => [
+            'produk' => [
+                'id' => $produk->id,
+                'nama' => $produk->nama,
+                'tipe' => $produk->tipe,
+            ],
+            'template' => $this->ringkasTemplate($template),
+            'draft' => $draft === null ? null : $this->ringkas($draft, denganData: true),
+        ]]);
     }
 
     /** FR-CDSN-02 #9: "Simpan sebagai Draft". */
@@ -363,18 +423,26 @@ class DesainController extends Controller
             'catatan_revisi' => $desain->catatan_revisi,
             'batas_revisi_pada' => $desain->batas_revisi_pada?->toIso8601String(),
             'diperbarui_pada' => $desain->updated_at?->toIso8601String(),
-            'template' => $desain->template === null ? null : [
-                'id' => $desain->template->id,
-                'nama' => $desain->template->nama,
-                'file_url' => GambarPublik::url($desain->template->file),
-                'lebar_kanvas' => $desain->template->lebar_kanvas,
-                'tinggi_kanvas' => $desain->template->tinggi_kanvas,
-                'area_x' => $desain->template->area_x,
-                'area_y' => $desain->template->area_y,
-                'area_lebar' => $desain->template->area_lebar,
-                'area_tinggi' => $desain->template->area_tinggi,
-            ],
+            'template' => $desain->template === null ? null : $this->ringkasTemplate($desain->template),
             'data_desain' => $data,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function ringkasTemplate(Template $template): array
+    {
+        return [
+            'id' => $template->id,
+            'nama' => $template->nama,
+            'file_url' => GambarPublik::url($template->file),
+            'lebar_kanvas' => $template->lebar_kanvas,
+            'tinggi_kanvas' => $template->tinggi_kanvas,
+            'area_x' => $template->area_x,
+            'area_y' => $template->area_y,
+            'area_lebar' => $template->area_lebar,
+            'area_tinggi' => $template->area_tinggi,
         ];
     }
 }
