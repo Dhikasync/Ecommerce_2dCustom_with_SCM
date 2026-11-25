@@ -8,6 +8,7 @@ use App\Models\Produk\Category;
 use App\Models\Produk\Product;
 use App\Models\Template;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -212,5 +213,146 @@ class PreviewDesainTest extends TestCase
         $this->actingAs($desain->user)
             ->getJson('/desain/'.$desain->id.'/preview')
             ->assertOk();
+    }
+
+    // ---------- FR-CDSN-04 #3: menyimpan gambar preview ----------
+
+    /**
+     * GD tidak terpasang, jadi PNG dibentuk dari signature + IHDR + IDAT/IEND
+     * dengan CRC sendiri; `mimes:png` membaca isi berkas, bukan namanya.
+     */
+    private function png(int $lebar, int $tinggi, string $nama = 'preview.png'): UploadedFile
+    {
+        $potong = fn (string $tipe, string $isi): string => pack('N', strlen($isi)).$tipe.$isi.pack('N', crc32($tipe.$isi));
+
+        $isi = "\x89PNG\r\n\x1a\n"
+            .$potong('IHDR', pack('NNCCCCC', $lebar, $tinggi, 8, 2, 0, 0, 0))
+            .$potong('IDAT', gzcompress(str_repeat("\0", 3)))
+            .$potong('IEND', '');
+
+        return UploadedFile::fake()->createWithContent($nama, $isi);
+    }
+
+    public function test_user_menyimpan_gambar_preview(): void
+    {
+        $desain = $this->desain($this->user(), $this->template($this->produkCustom()), [$this->teks()]);
+
+        $respons = $this->actingAs($desain->user)
+            ->post('/desain/'.$desain->id.'/preview', ['file' => $this->png(800, 600)], [
+                'Accept' => 'application/json',
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Gambar preview disimpan');
+
+        $berkas = $desain->refresh()->preview_gambar;
+
+        $this->assertNotNull($berkas);
+        $this->assertStringStartsWith('desain/preview/'.$desain->id.'/', $berkas);
+        $this->assertStringEndsWith('.png', $berkas);
+        Storage::disk('public')->assertExists($berkas);
+
+        $this->assertSame(Storage::disk('public')->url($berkas), $respons->json('data.preview_gambar'));
+    }
+
+    public function test_preview_lama_diganti_saat_disimpan_ulang(): void
+    {
+        $desain = $this->desain($this->user(), $this->template($this->produkCustom()), [$this->teks()]);
+
+        $this->actingAs($desain->user)
+            ->post('/desain/'.$desain->id.'/preview', ['file' => $this->png(800, 600)], [
+                'Accept' => 'application/json',
+            ])
+            ->assertOk();
+
+        $lama = $desain->refresh()->preview_gambar;
+
+        $this->actingAs($desain->user)
+            ->post('/desain/'.$desain->id.'/preview', ['file' => $this->png(800, 600, 'ulang.png')], [
+                'Accept' => 'application/json',
+            ])
+            ->assertOk();
+
+        $baru = $desain->refresh()->preview_gambar;
+
+        $this->assertNotSame($lama, $baru);
+        Storage::disk('public')->assertMissing($lama);
+        Storage::disk('public')->assertExists($baru);
+    }
+
+    public function test_berkas_bukan_png_ditolak(): void
+    {
+        $desain = $this->desain($this->user(), $this->template($this->produkCustom()), [$this->teks()]);
+
+        $this->actingAs($desain->user)
+            ->post('/desain/'.$desain->id.'/preview', [
+                'file' => UploadedFile::fake()->createWithContent('preview.pdf', "%PDF-1.4\n1 0 obj\n<<>>\nendobj\n"),
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.file.0', 'Format file tidak didukung, gunakan PNG');
+
+        $this->assertNull($desain->refresh()->preview_gambar);
+    }
+
+    public function test_gambar_preview_wajib_dikirim(): void
+    {
+        $desain = $this->desain($this->user(), $this->template($this->produkCustom()), [$this->teks()]);
+
+        $this->actingAs($desain->user)
+            ->post('/desain/'.$desain->id.'/preview', [], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.file.0', 'Pilih gambar preview yang akan disimpan');
+    }
+
+    public function test_guest_tidak_bisa_menyimpan_gambar_preview(): void
+    {
+        $desain = $this->desain($this->user(), $this->template($this->produkCustom()), [$this->teks()]);
+
+        $this->post('/desain/'.$desain->id.'/preview', ['file' => $this->png(800, 600)], [
+            'Accept' => 'application/json',
+        ])->assertUnauthorized();
+    }
+
+    public function test_menyimpan_preview_desain_milik_user_lain_dijawab_404(): void
+    {
+        $desain = $this->desain($this->user(), $this->template($this->produkCustom()), [$this->teks()]);
+
+        $this->actingAs($this->user())
+            ->post('/desain/'.$desain->id.'/preview', ['file' => $this->png(800, 600)], [
+                'Accept' => 'application/json',
+            ])
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Desain tidak ditemukan');
+    }
+
+    public function test_desain_yang_sudah_disetujui_tidak_bisa_menyimpan_preview(): void
+    {
+        $desain = $this->desain($this->user(), $this->template($this->produkCustom()), [$this->teks()], [
+            'status' => 'disetujui',
+        ]);
+
+        $this->actingAs($desain->user)
+            ->post('/desain/'.$desain->id.'/preview', ['file' => $this->png(800, 600)], [
+                'Accept' => 'application/json',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Desain ini tidak dapat diubah lagi');
+
+        $this->assertNull($desain->refresh()->preview_gambar);
+    }
+
+    public function test_preview_tersimpan_muncul_di_halaman_preview(): void
+    {
+        $desain = $this->desain($this->user(), $this->template($this->produkCustom()), [$this->teks()]);
+
+        $this->actingAs($desain->user)
+            ->post('/desain/'.$desain->id.'/preview', ['file' => $this->png(800, 600)], [
+                'Accept' => 'application/json',
+            ])
+            ->assertOk();
+
+        $this->actingAs($desain->user)
+            ->getJson('/desain/'.$desain->id.'/preview')
+            ->assertOk()
+            ->assertJsonPath('data.preview_gambar', Storage::disk('public')->url($desain->refresh()->preview_gambar));
     }
 }

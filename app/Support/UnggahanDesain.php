@@ -38,4 +38,10 @@ final class UnggahanDesain
     {
         return 'desain/gambar/'.$designID;
     }
+
+    /** FR-CDSN-04 #3: gambar preview hasil render klien, satu folder per desain. */
+    public static function folderPreview(int $designID): string
+    {
+        return 'desain/preview/'.$designID;
+    }
 }

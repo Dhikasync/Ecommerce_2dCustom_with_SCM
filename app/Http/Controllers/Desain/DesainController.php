@@ -31,6 +31,8 @@ class DesainController extends Controller
     /** FR-CDSN-04 #4: dokumen hanya meminta "pesan error", kalimat ini dipilih di sini. */
     private const PESAN_GAGAL_RENDER = 'Preview gagal dimuat, periksa kembali elemen desain';
 
+    private const PESAN_PREVIEW_DISIMPAN = 'Gambar preview disimpan';
+
     /** Lampiran B: draft dan desain yang diminta revisi masih boleh disunting. */
     private const STATUS_BISA_DIUBAH = ['draft', 'perlu_revisi'];
 
@@ -93,6 +95,51 @@ class DesainController extends Controller
                 ? null
                 : GambarPublik::url($desain->preview_gambar),
         ]]);
+    }
+
+    /**
+     * FR-CDSN-04 #3: menyimpan gambar preview hasil render klien. Server tidak
+     * bisa merender sendiri (tidak ada GD/Imagick), jadi berkasnya diterima
+     * dari kanvas dan disimpan sebagai rujukan keranjang serta validasi Admin.
+     */
+    public function simpanPreview(Request $request, int $id): JsonResponse
+    {
+        $desain = $this->milikUser($request, $id);
+
+        if ($desain === null) {
+            return $this->tidakDitemukan();
+        }
+
+        if (! in_array($desain->status, self::STATUS_BISA_DIUBAH, true)) {
+            return response()->json(['message' => self::PESAN_TIDAK_BISA_DIUBAH], 422);
+        }
+
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:png', 'max:10240'],
+        ], [
+            'file.required' => 'Pilih gambar preview yang akan disimpan',
+            'file.mimes' => 'Format file tidak didukung, gunakan PNG',
+            'file.max' => 'Ukuran file melebihi batas maksimum',
+        ]);
+
+        $lama = $desain->preview_gambar;
+        $berkas = $request->file('file')->store(UnggahanDesain::folderPreview($desain->id), self::DISK);
+
+        $desain->update(['preview_gambar' => $berkas]);
+
+        // Preview lama dilepas setelah yang baru tersimpan, supaya folder desain
+        // tidak menumpuk gambar yang tidak lagi dipakai.
+        if ($lama !== null && $lama !== $berkas) {
+            Storage::disk(self::DISK)->delete($lama);
+        }
+
+        return response()->json([
+            'message' => self::PESAN_PREVIEW_DISIMPAN,
+            'data' => [
+                'id' => $desain->id,
+                'preview_gambar' => GambarPublik::url($berkas),
+            ],
+        ]);
     }
 
     /**

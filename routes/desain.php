@@ -71,4 +71,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/desain/{id}/preview', [DesainController::class, 'preview'])
         ->whereNumber('id')
         ->name('desain.preview');
+
+    // FR-CDSN-04 #3: menyimpan PNG hasil render klien ke `designs.preview_gambar`.
+    Route::post('/desain/{id}/preview', [DesainController::class, 'simpanPreview'])
+        ->whereNumber('id')
+        ->name('desain.preview.store');
 });
