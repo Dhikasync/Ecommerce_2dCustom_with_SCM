@@ -25,6 +25,22 @@ integration and 2D custom design. Laravel (PHP 8.5), PostgreSQL (nichibag_db).
 - Never present a partial set as complete. Check completeness against the
   documents before saying something is done.
 
+### Phase marker on every reply
+
+Every reply starts with one line that says which phase of a micro-step it is,
+so the phase is known without reading the technical part:
+
+- 🟥 **TES MERAH** — tests are written first and must fail before any feature
+  code exists. `▶` opens the phase, `■` closes it with the actual numbers.
+- 🟨 **FITUR** — feature code is written until the red tests pass.
+- 🟩 **HIJAU** — full suite plus Pint run; only this phase may claim the step
+  is green.
+- 🟦 **KIRIM** — commit, push, CI check.
+
+Format: `▶ 🟥 TES MERAH (1/4) — <what> · TES ▸ FITUR ▸ HIJAU ▸ KIRIM`, then
+when it closes: `■ 🟥 TES MERAH selesai: 8 failed (9 assertions) → lanjut 🟨
+FITUR`. Never skip 🟥; a phase without a red run first is not done.
+
 ## Rules that must not be broken
 
 - Payment by gateway only. No manual payment, no "Menunggu Verifikasi" status.
