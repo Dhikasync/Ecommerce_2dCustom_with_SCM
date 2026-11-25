@@ -65,4 +65,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::put('/desain/{id}', [DesainController::class, 'ubah'])
         ->whereNumber('id')
         ->name('desain.update');
+
+    // FR-CDSN-04 #1: halaman preview (UC-19). Hanya membaca, jadi tidak
+    // dibatasi status; yang dijaga adalah kepemilikan desainnya.
+    Route::get('/desain/{id}/preview', [DesainController::class, 'preview'])
+        ->whereNumber('id')
+        ->name('desain.preview');
 });
