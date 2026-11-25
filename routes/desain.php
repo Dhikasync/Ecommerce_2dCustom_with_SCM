@@ -12,6 +12,7 @@
 use App\Http\Controllers\Desain\DesainController;
 use App\Http\Controllers\Desain\TemplateController;
 use App\Http\Controllers\Desain\UnggahanController;
+use App\Http\Controllers\Desain\ValidasiDesainController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'active', 'role:admin_ecommerce'])
@@ -29,6 +30,22 @@ Route::middleware(['auth', 'active', 'role:admin_ecommerce'])
 
         Route::delete('/template/{id}', [TemplateController::class, 'hapus'])
             ->name('template.destroy');
+
+        // FR-CDSN-05 #1/#2/#3/#5: antrean validasi desain custom.
+        Route::get('/validasi-desain', [ValidasiDesainController::class, 'daftar'])
+            ->name('validasi.index');
+
+        Route::get('/validasi-desain/{id}', [ValidasiDesainController::class, 'tampil'])
+            ->whereNumber('id')
+            ->name('validasi.show');
+
+        Route::post('/validasi-desain/{id}/setujui', [ValidasiDesainController::class, 'setujui'])
+            ->whereNumber('id')
+            ->name('validasi.setujui');
+
+        Route::post('/validasi-desain/{id}/revisi', [ValidasiDesainController::class, 'revisi'])
+            ->whereNumber('id')
+            ->name('validasi.revisi');
     });
 
 // FR-CDSN-03: daftar sementara, unggah, dan hapus gambar editor.
@@ -65,4 +82,15 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::put('/desain/{id}', [DesainController::class, 'ubah'])
         ->whereNumber('id')
         ->name('desain.update');
+
+    // FR-CDSN-04 #1: halaman preview (UC-19). Hanya membaca, jadi tidak
+    // dibatasi status; yang dijaga adalah kepemilikan desainnya.
+    Route::get('/desain/{id}/preview', [DesainController::class, 'preview'])
+        ->whereNumber('id')
+        ->name('desain.preview');
+
+    // FR-CDSN-04 #3: menyimpan PNG hasil render klien ke `designs.preview_gambar`.
+    Route::post('/desain/{id}/preview', [DesainController::class, 'simpanPreview'])
+        ->whereNumber('id')
+        ->name('desain.preview.store');
 });

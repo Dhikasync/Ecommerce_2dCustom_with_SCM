@@ -28,6 +28,11 @@ class DesainController extends Controller
 
     private const PESAN_TIDAK_BISA_DIUBAH = 'Desain ini tidak dapat diubah lagi';
 
+    /** FR-CDSN-04 #4: dokumen hanya meminta "pesan error", kalimat ini dipilih di sini. */
+    private const PESAN_GAGAL_RENDER = 'Preview gagal dimuat, periksa kembali elemen desain';
+
+    private const PESAN_PREVIEW_DISIMPAN = 'Gambar preview disimpan';
+
     /** Lampiran B: draft dan desain yang diminta revisi masih boleh disunting. */
     private const STATUS_BISA_DIUBAH = ['draft', 'perlu_revisi'];
 
@@ -55,6 +60,122 @@ class DesainController extends Controller
         }
 
         return response()->json(['data' => $this->ringkas($desain, denganData: true)]);
+    }
+
+    /**
+     * FR-CDSN-04 #1/#4, UC-19: data yang dipakai halaman preview untuk
+     * menggambar gabungan template dan elemen. Hanya membaca, jadi semua
+     * status boleh dilihat pemiliknya.
+     */
+    public function preview(Request $request, int $id): JsonResponse
+    {
+        $desain = $this->milikUser($request, $id);
+
+        if ($desain === null) {
+            return $this->tidakDitemukan();
+        }
+
+        $elemen = $this->elemenSiapRender($desain);
+
+        if ($elemen === null) {
+            return response()->json(['message' => self::PESAN_GAGAL_RENDER], 422);
+        }
+
+        return response()->json(['data' => [
+            'id' => $desain->id,
+            'status' => $desain->status,
+            'versi' => $desain->versi,
+            'kanvas' => [
+                'lebar' => $desain->template?->lebar_kanvas,
+                'tinggi' => $desain->template?->tinggi_kanvas,
+            ],
+            'template' => $desain->template === null ? null : $this->ringkasTemplate($desain->template),
+            'elemen' => $elemen,
+            'preview_gambar' => $desain->preview_gambar === null
+                ? null
+                : GambarPublik::url($desain->preview_gambar),
+        ]]);
+    }
+
+    /**
+     * FR-CDSN-04 #3: menyimpan gambar preview hasil render klien. Server tidak
+     * bisa merender sendiri (tidak ada GD/Imagick), jadi berkasnya diterima
+     * dari kanvas dan disimpan sebagai rujukan keranjang serta validasi Admin.
+     */
+    public function simpanPreview(Request $request, int $id): JsonResponse
+    {
+        $desain = $this->milikUser($request, $id);
+
+        if ($desain === null) {
+            return $this->tidakDitemukan();
+        }
+
+        if (! in_array($desain->status, self::STATUS_BISA_DIUBAH, true)) {
+            return response()->json(['message' => self::PESAN_TIDAK_BISA_DIUBAH], 422);
+        }
+
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:png', 'max:10240'],
+        ], [
+            'file.required' => 'Pilih gambar preview yang akan disimpan',
+            'file.mimes' => 'Format file tidak didukung, gunakan PNG',
+            'file.max' => 'Ukuran file melebihi batas maksimum',
+        ]);
+
+        $lama = $desain->preview_gambar;
+        $berkas = $request->file('file')->store(UnggahanDesain::folderPreview($desain->id), self::DISK);
+
+        $desain->update(['preview_gambar' => $berkas]);
+
+        // Preview lama dilepas setelah yang baru tersimpan, supaya folder desain
+        // tidak menumpuk gambar yang tidak lagi dipakai.
+        if ($lama !== null && $lama !== $berkas) {
+            Storage::disk(self::DISK)->delete($lama);
+        }
+
+        return response()->json([
+            'message' => self::PESAN_PREVIEW_DISIMPAN,
+            'data' => [
+                'id' => $desain->id,
+                'preview_gambar' => GambarPublik::url($berkas),
+            ],
+        ]);
+    }
+
+    /**
+     * FR-CDSN-04 #1/#6: elemen diurutkan menurut `z` supaya klien menggambar
+     * dari lapisan belakang ke depan tanpa menebak, dan gambar yang berkasnya
+     * hilang/rusak membuat preview ditolak (#4) alih-alih tampil bolong.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    private function elemenSiapRender(Design $desain): ?array
+    {
+        $elemen = $desain->data_desain['elemen'] ?? [];
+
+        usort($elemen, fn (array $a, array $b) => ($a['z'] ?? 0) <=> ($b['z'] ?? 0));
+
+        foreach ($elemen as $indeks => $item) {
+            if (($item['tipe'] ?? null) !== 'gambar') {
+                continue;
+            }
+
+            $berkas = $item['berkas'] ?? null;
+
+            if (! is_string($berkas) || $berkas === '') {
+                return null;
+            }
+
+            $disk = Storage::disk(self::DISK);
+
+            if (! $disk->exists($berkas) || @getimagesize($disk->path($berkas)) === false) {
+                return null;
+            }
+
+            $elemen[$indeks]['url'] = GambarPublik::url($berkas);
+        }
+
+        return $elemen;
     }
 
     /**
