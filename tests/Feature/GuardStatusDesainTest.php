@@ -124,4 +124,25 @@ class GuardStatusDesainTest extends TestCase
         $this->assertSame(0, OrderStatusHistory::count());
         $this->assertSame(0, Notification::count());
     }
+
+    /** FR-ORDR-03 #6: custom Sedang Dicetak tapi desain belum Disetujui ditolak. */
+    public function test_siap_kirim_ditolak_jika_desain_perlu_revisi(): void
+    {
+        ['pesanan' => $pesanan] = $this->custom('perlu_revisi', ['status' => 'sedang_dicetak']);
+        Payment::create([
+            'order_id' => $pesanan->id,
+            'snap_token' => 'token-guard-siap',
+            'jumlah' => 150000,
+            'status' => 'lunas',
+            'dibayar_pada' => now()->subHour(),
+        ]);
+
+        $this->actingAs(User::factory()->create(['role' => 'admin_ecommerce']))
+            ->postJson('/admin/pesanan/'.$pesanan->nomor_pesanan.'/siap-kirim')
+            ->assertStatus(422);
+
+        $this->assertSame('sedang_dicetak', $pesanan->refresh()->status);
+        $this->assertSame(0, OrderStatusHistory::count());
+        $this->assertSame(0, Notification::count());
+    }
 }
