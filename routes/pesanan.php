@@ -17,6 +17,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     // FR-ORDR-01 #2: detail terpisah per pesanan.
     Route::get('/pesanan/{nomor}', [PesananController::class, 'show'])
         ->name('pesanan.show');
+
+    Route::post('/pesanan/{nomor}/terima', [PesananController::class, 'terima'])
+        ->name('pesanan.terima');
 });
 
 // FR-ORDR-03 #5/#6/#7 + FR-ORDR-04 #1/#2: aksi Admin Ecommerce.

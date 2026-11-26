@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Pesanan;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\OrderStatusHistory;
+use App\Services\Pesanan\KabarStatusPesanan;
 use App\Support\RingkasanPesanan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -16,6 +19,8 @@ use Illuminate\Validation\Rule;
 class PesananController extends Controller
 {
     private const PESAN_TIDAK_DITEMUKAN = 'Pesanan tidak ditemukan';
+
+    public function __construct(private readonly KabarStatusPesanan $kabar) {}
 
     /**
      * FR-ORDR-01 #1: daftar pesanan dengan filter status pesanan. Sembilan
@@ -60,5 +65,64 @@ class PesananController extends Controller
         }
 
         return response()->json(['data' => RingkasanPesanan::untukDetail($pesanan)]);
+    }
+
+    /** FR-ORDR-04 #4: User menyatakan paket diterima. */
+    public function terima(Request $request, string $nomor): JsonResponse
+    {
+        $pesanan = Order::query()
+            ->where('nomor_pesanan', $nomor)
+            ->where('user_id', $request->user()->id)
+            ->first();
+
+        if ($pesanan === null) {
+            return response()->json(['message' => self::PESAN_TIDAK_DITEMUKAN], 404);
+        }
+
+        if ($pesanan->status !== 'dikirim') {
+            return response()->json(['message' => 'Perubahan status tidak valid'], 422);
+        }
+
+        $berubah = DB::transaction(function () use ($pesanan, $request) {
+            $segar = Order::whereKey($pesanan->id)->lockForUpdate()->first();
+
+            if ($segar === null || $segar->status !== 'dikirim') {
+                return false;
+            }
+
+            OrderStatusHistory::create([
+                'order_id' => $segar->id,
+                'status_lama' => 'dikirim',
+                'status_baru' => 'selesai',
+                'diubah_oleh' => $request->user()->id,
+            ]);
+
+            $segar->update([
+                'status' => 'selesai',
+                'selesai_pada' => now(),
+            ]);
+
+            return true;
+        });
+
+        if (! $berubah) {
+            return response()->json(['message' => 'Perubahan status tidak valid'], 422);
+        }
+
+        $segar = $pesanan->refresh();
+
+        $this->kabar->kirim(
+            $segar,
+            'Pesanan selesai',
+            'Pesanan '.$segar->nomor_pesanan.' telah selesai. Terima kasih sudah berbelanja.',
+        );
+
+        return response()->json([
+            'message' => 'Pesanan diterima',
+            'data' => [
+                'nomor_pesanan' => $segar->nomor_pesanan,
+                'status' => $segar->status,
+            ],
+        ]);
     }
 }
