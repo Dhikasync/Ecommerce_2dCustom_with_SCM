@@ -7,6 +7,7 @@ use App\Models\Design;
 use App\Models\DesignRevision;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Services\Desain\KabarValidasiDesain;
 use App\Services\Pembayaran\KabarPembayaran;
 use App\Support\GambarPublik;
 use Illuminate\Http\JsonResponse;
@@ -15,12 +16,14 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * FR-CDSN-05 #2/#3/#5, UC-18: antrean validasi desain untuk Admin Ecommerce.
- * #2/#3 sudah menyentuh pesanan; #2 juga mengirim link bayar.
- * #4/#7 menyusul bersama notifikasi revisi.
+ * #2/#3/#7 sudah menyentuh pesanan dan mengirim kabar ke User; #10 menyusul.
  */
 class ValidasiDesainController extends Controller
 {
-    public function __construct(private readonly KabarPembayaran $kabar) {}
+    public function __construct(
+        private readonly KabarPembayaran $kabar,
+        private readonly KabarValidasiDesain $kabarDesain,
+    ) {}
 
     private const PESAN_TIDAK_DITEMUKAN = 'Desain tidak ditemukan';
 
@@ -165,6 +168,9 @@ class ValidasiDesainController extends Controller
                     ->update(['status' => 'menunggu_revisi_desain']);
             }
         });
+
+        // FR-CDSN-05 #7: kabar dikirim setelah revisi tersimpan.
+        $this->kabarDesain->kirimRevisi($desain, $catatan);
 
         return response()->json([
             'message' => 'Permintaan revisi dikirim',

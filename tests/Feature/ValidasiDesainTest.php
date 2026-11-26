@@ -295,6 +295,28 @@ class ValidasiDesainTest extends TestCase
         $this->assertNull($pesanan->kadaluwarsa_pada);
     }
 
+    /** FR-CDSN-05 #7: revisi memberi kabar ke User beserta catatan dan link editor. */
+    public function test_revisi_desain_mengirim_notifikasi_ke_user(): void
+    {
+        $desain = $this->desain($this->user(), $this->template($this->produkCustom()));
+        $pesanan = $this->pesananMenungguValidasi($desain);
+        $catatan = 'Logo terlalu kecil, perbesar sampai 5 cm';
+        $tautan = route('desain.editor', $desain->template->product_id);
+
+        $this->actingAs($this->adminEcommerce())
+            ->postJson('/admin/validasi-desain/'.$desain->id.'/revisi', [
+                'catatan_revisi' => $catatan,
+            ])
+            ->assertOk();
+
+        $kabar = Notification::where('user_id', $pesanan->user_id)->sole();
+
+        $this->assertStringContainsString($catatan, $kabar->pesan);
+        $this->assertStringContainsString($tautan, $kabar->pesan);
+        Mail::assertSent(PembayaranMail::class, fn (PembayaranMail $mail) => str_contains($mail->pesan, $catatan)
+            && str_contains($mail->pesan, $tautan));
+    }
+
     public function test_catatan_revisi_wajib_diisi(): void
     {
         $desain = $this->desain($this->user(), $this->template($this->produkCustom()));
