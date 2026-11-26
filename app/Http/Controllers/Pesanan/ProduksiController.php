@@ -20,6 +20,64 @@ class ProduksiController extends Controller
 
     public function __construct(private readonly KabarStatusPesanan $kabar) {}
 
+    /** FR-ORDR-03 #6: custom dari Sedang Dicetak, produk jadi dari Diproses. */
+    public function siapKirim(Request $request, string $nomor): JsonResponse
+    {
+        $pesanan = Order::query()
+            ->where('nomor_pesanan', $nomor)
+            ->first();
+
+        if ($pesanan === null) {
+            return response()->json(['message' => 'Pesanan tidak ditemukan'], 404);
+        }
+
+        $custom = $pesanan->orderItems()->whereNotNull('design_id')->exists();
+        $dari = $custom ? 'sedang_dicetak' : 'diproses';
+
+        if ($pesanan->status !== $dari) {
+            return response()->json(['message' => self::PESAN_TIDAK_VALID], 422);
+        }
+
+        $berubah = DB::transaction(function () use ($pesanan, $request, $dari) {
+            $segar = Order::whereKey($pesanan->id)->lockForUpdate()->first();
+
+            if ($segar === null || $segar->status !== $dari) {
+                return false;
+            }
+
+            OrderStatusHistory::create([
+                'order_id' => $segar->id,
+                'status_lama' => $dari,
+                'status_baru' => 'siap_kirim',
+                'diubah_oleh' => $request->user()->id,
+            ]);
+
+            $segar->update(['status' => 'siap_kirim']);
+
+            return true;
+        });
+
+        if (! $berubah) {
+            return response()->json(['message' => self::PESAN_TIDAK_VALID], 422);
+        }
+
+        $segar = $pesanan->refresh();
+
+        $this->kabar->kirim(
+            $segar,
+            'Pesanan siap kirim',
+            'Pesanan '.$segar->nomor_pesanan.' sudah siap dikirim.',
+        );
+
+        return response()->json([
+            'message' => 'Pesanan siap kirim',
+            'data' => [
+                'nomor_pesanan' => $segar->nomor_pesanan,
+                'status' => $segar->status,
+            ],
+        ]);
+    }
+
     public function mulaiCetak(Request $request, string $nomor): JsonResponse
     {
         $pesanan = Order::query()
