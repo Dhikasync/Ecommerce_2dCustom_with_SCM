@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * FR-CDSN-05 #2/#3/#5, UC-18: antrean validasi desain untuk Admin Ecommerce.
- * #2 sudah membuka pesanan untuk dibayar; #3/#7 menyusul bersama notifikasi.
+ * #2/#3 sudah menyentuh pesanan; #4/#7 menyusul bersama notifikasi.
  */
 class ValidasiDesainController extends Controller
 {
@@ -138,6 +138,18 @@ class ValidasiDesainController extends Controller
             ]);
 
             $this->catatRiwayat($desain, 'perlu_revisi', $catatan, $request->user()->id);
+
+            // FR-CDSN-05 #3: pesanan ikut masuk antrean revisi, tanpa batas bayar.
+            $orderId = OrderItem::query()
+                ->where('design_id', $desain->id)
+                ->value('order_id');
+
+            if ($orderId !== null) {
+                Order::query()
+                    ->whereKey($orderId)
+                    ->where('status', 'menunggu_validasi')
+                    ->update(['status' => 'menunggu_revisi_desain']);
+            }
         });
 
         return response()->json([

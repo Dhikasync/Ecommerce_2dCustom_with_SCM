@@ -256,6 +256,24 @@ class ValidasiDesainTest extends TestCase
         $this->assertSame($admin->id, $riwayat->divalidasi_oleh);
     }
 
+    /** FR-CDSN-05 #3: permintaan revisi memindahkan pesanan ke antrean revisi. */
+    public function test_revisi_desain_mengubah_status_pesanan(): void
+    {
+        $desain = $this->desain($this->user(), $this->template($this->produkCustom()));
+        $pesanan = $this->pesananMenungguValidasi($desain);
+
+        $this->actingAs($this->adminEcommerce())
+            ->postJson('/admin/validasi-desain/'.$desain->id.'/revisi', [
+                'catatan_revisi' => 'Perbesar logo',
+            ])
+            ->assertOk();
+
+        $pesanan->refresh();
+
+        $this->assertSame('menunggu_revisi_desain', $pesanan->status);
+        $this->assertNull($pesanan->kadaluwarsa_pada);
+    }
+
     public function test_catatan_revisi_wajib_diisi(): void
     {
         $desain = $this->desain($this->user(), $this->template($this->produkCustom()));
