@@ -5,20 +5,21 @@ namespace Tests\Feature;
 use App\Models\Auth\User;
 use App\Models\Design;
 use App\Models\DesignRevision;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Produk\Category;
 use App\Models\Produk\Product;
 use App\Models\Template;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
  * FR-CDSN-05 #2/#3/#5, UC-18: Admin Ecommerce memvalidasi desain yang masuk
  * antrean — menyetujui atau meminta revisi dengan catatan — dan setiap
- * keputusan meninggalkan satu baris riwayat.
- *
- * Efek ke pesanan (#2/#3 status pesanan, #8 kedaluwarsa) belum diuji di sini
- * karena modul pesanan belum ada.
+ * keputusan meninggalkan satu baris riwayat. #2 juga menguji efek persetujuan
+ * ke status pesanan dan batas bayar 24 jam (user-story.md:380).
  */
 class ValidasiDesainTest extends TestCase
 {
@@ -86,6 +87,33 @@ class ValidasiDesainTest extends TestCase
             'status' => 'menunggu_validasi',
             'versi' => 1,
         ], $ganti));
+    }
+
+    /** FR-CDSN-05 #2: pesanan custom yang menunggu keputusan desain. */
+    private function pesananMenungguValidasi(Design $desain): Order
+    {
+        $pesanan = Order::create([
+            'user_id' => $desain->user_id,
+            'nomor_pesanan' => 'INV-'.strtoupper((string) Str::ulid()),
+            'status' => 'menunggu_validasi',
+            'subtotal_barang' => 150000,
+            'ongkir' => 0,
+            'total' => 150000,
+            'nama_penerima' => 'Andhi',
+            'no_hp' => '+628123456789',
+            'alamat_pengiriman' => 'Jl. Sumur Bandung No. 1',
+        ]);
+
+        OrderItem::create([
+            'order_id' => $pesanan->id,
+            'design_id' => $desain->id,
+            'nama_produk' => 'Tas Rotan Custom',
+            'quantity' => 1,
+            'harga_satuan' => 150000,
+            'sla_hari' => 7,
+        ]);
+
+        return $pesanan;
     }
 
     // ---------- FR-CDSN-05 #1: daftar validasi ----------
@@ -182,6 +210,23 @@ class ValidasiDesainTest extends TestCase
         $this->assertSame(1, $riwayat->versi);
         $this->assertSame($admin->id, $riwayat->divalidasi_oleh);
         $this->assertEquals($desain->data_desain, $riwayat->data_desain);
+    }
+
+    /** FR-CDSN-05 #2: desain disetujui membuka pesanan untuk dibayar 24 jam. */
+    public function test_setujui_desain_mengubah_status_dan_batas_pesanan(): void
+    {
+        $desain = $this->desain($this->user(), $this->template($this->produkCustom()));
+        $pesanan = $this->pesananMenungguValidasi($desain);
+
+        $this->actingAs($this->adminEcommerce())
+            ->postJson('/admin/validasi-desain/'.$desain->id.'/setujui')
+            ->assertOk();
+
+        $pesanan->refresh();
+
+        $this->assertSame('menunggu_pembayaran', $pesanan->status);
+        $this->assertNotNull($pesanan->kadaluwarsa_pada);
+        $this->assertSame(24, (int) round(now()->diffInHours($pesanan->kadaluwarsa_pada)));
     }
 
     // ---------- FR-CDSN-05 #3: meminta revisi ----------

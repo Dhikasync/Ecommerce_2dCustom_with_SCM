@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Desain;
 use App\Http\Controllers\Controller;
 use App\Models\Design;
 use App\Models\DesignRevision;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Support\GambarPublik;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,8 +14,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * FR-CDSN-05 #2/#3/#5, UC-18: antrean validasi desain untuk Admin Ecommerce.
- * Sisi desain dikerjakan di sini; perubahan status pesanan (#2/#3) dan
- * notifikasi (#7) menyusul setelah modul pesanan ada.
+ * #2 sudah membuka pesanan untuk dibayar; #3/#7 menyusul bersama notifikasi.
  */
 class ValidasiDesainController extends Controller
 {
@@ -77,6 +78,21 @@ class ValidasiDesainController extends Controller
             ]);
 
             $this->catatRiwayat($desain, 'disetujui', null, $request->user()->id);
+
+            // FR-CDSN-05 #2 + srs.md:822: order custom terbuka 24 jam sejak disetujui.
+            $orderId = OrderItem::query()
+                ->where('design_id', $desain->id)
+                ->value('order_id');
+
+            if ($orderId !== null) {
+                Order::query()
+                    ->whereKey($orderId)
+                    ->where('status', 'menunggu_validasi')
+                    ->update([
+                        'status' => 'menunggu_pembayaran',
+                        'kadaluwarsa_pada' => now()->addDay(),
+                    ]);
+            }
         });
 
         return response()->json([
