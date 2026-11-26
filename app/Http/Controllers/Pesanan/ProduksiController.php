@@ -39,6 +39,18 @@ class ProduksiController extends Controller
             return response()->json(['message' => self::PESAN_TIDAK_VALID], 422);
         }
 
+        if ($custom) {
+            $designIds = $pesanan->orderItems()->whereNotNull('design_id')->pluck('design_id');
+            $disetujui = Design::query()
+                ->whereIn('id', $designIds)
+                ->where('status', 'disetujui')
+                ->count();
+
+            if ($disetujui !== $designIds->count()) {
+                return response()->json(['message' => self::PESAN_TIDAK_VALID], 422);
+            }
+        }
+
         $berubah = DB::transaction(function () use ($pesanan, $request, $dari) {
             $segar = Order::whereKey($pesanan->id)->lockForUpdate()->first();
 
