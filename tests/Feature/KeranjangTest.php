@@ -12,8 +12,9 @@ use Tests\TestCase;
 
 /**
  * FR-CART-01, UC-24: tambah, ubah jumlah, hapus item, keranjang kosong, dan
- * harga yang dikunci saat item masuk. Item custom masih dummy (`design_id`)
- * sampai FR-CDSN-04 membangun preview desain.
+ * harga yang dikunci saat item masuk. Item custom hanya boleh lahir dari
+ * preview desain (FR-CDSN-04 + srs.md:471), yaitu desain yang sudah punya
+ * `preview_gambar`.
  */
 class KeranjangTest extends TestCase
 {
@@ -232,7 +233,7 @@ class KeranjangTest extends TestCase
             ->assertJsonCount(0, 'data.custom.items');
     }
 
-    /** FR-CART-01 #2 (dummy): item custom masuk ke bagian terpisah. */
+    /** FR-CART-01 #2: item custom masuk ke bagian terpisah. */
     public function test_item_custom_masuk_ke_bagian_terpisah(): void
     {
         $varian = $this->varian([], ['tipe' => 'custom', 'sla_hari' => 3]);
@@ -298,6 +299,41 @@ class KeranjangTest extends TestCase
             ])
             ->assertNotFound()
             ->assertJsonPath('message', 'Desain tidak ditemukan');
+    }
+
+    /** FR-CDSN-04 + srs.md:471: keranjang custom hanya boleh diisi dari preview. */
+    public function test_desain_tanpa_preview_tidak_bisa_masuk_keranjang(): void
+    {
+        $varian = $this->varian([], ['tipe' => 'custom', 'sla_hari' => 3]);
+        $desain = $this->desain($varian);
+        $desain->update(['preview_gambar' => null]);
+
+        $this->actingAs($this->user)
+            ->postJson('/keranjang/item', [
+                'variant_id' => $varian->id,
+                'quantity' => 1,
+                'design_id' => $desain->id,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Buka preview desain terlebih dahulu sebelum menambahkan ke keranjang');
+
+        $this->assertSame(0, Design::find($desain->id)->cartItems()->count());
+    }
+
+    public function test_desain_yang_sudah_dipreview_bisa_masuk_keranjang(): void
+    {
+        $varian = $this->varian([], ['tipe' => 'custom', 'sla_hari' => 3]);
+        $desain = $this->desain($varian);
+
+        $this->actingAs($this->user)
+            ->postJson('/keranjang/item', [
+                'variant_id' => $varian->id,
+                'quantity' => 1,
+                'design_id' => $desain->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.design_id', $desain->id)
+            ->assertJsonPath('data.is_custom', true);
     }
 
     public function test_item_menampilkan_nama_gambar_dan_varian(): void

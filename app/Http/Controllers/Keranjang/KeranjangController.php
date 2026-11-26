@@ -27,6 +27,9 @@ class KeranjangController extends Controller
 
     private const PESAN_DESAIN_TIDAK_DITEMUKAN = 'Desain tidak ditemukan';
 
+    /** srs.md:471: "hanya dari Preview inilah User dapat menambahkan desain ke keranjang". */
+    private const PESAN_CUSTOM_TANPA_PREVIEW = 'Buka preview desain terlebih dahulu sebelum menambahkan ke keranjang';
+
     /** FR-CART-01 #1/#5, srs.md:513-514: produk jadi dan custom tidak dicampur. */
     public function tampil(Request $request): JsonResponse
     {
@@ -79,6 +82,12 @@ class KeranjangController extends Controller
 
             if ($desain === null) {
                 return response()->json(['message' => self::PESAN_DESAIN_TIDAK_DITEMUKAN], 404);
+            }
+
+            // FR-CDSN-04 + srs.md:471: desain yang belum pernah dirender preview
+            // belum boleh masuk keranjang; preview yang tersimpan jadi buktinya.
+            if ($desain->preview_gambar === null) {
+                return $this->tolak(self::PESAN_CUSTOM_TANPA_PREVIEW);
             }
         }
 
