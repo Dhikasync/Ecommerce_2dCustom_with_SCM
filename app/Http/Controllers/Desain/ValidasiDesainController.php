@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * FR-CDSN-05 #2/#3/#5, UC-18: antrean validasi desain untuk Admin Ecommerce.
- * #2/#3/#7 sudah menyentuh pesanan dan mengirim kabar ke User; #10 menyusul.
+ * #2/#3/#7 sudah menyentuh pesanan; #10 menunggu FR-SYS-01 #4 (OPSIONAL).
  */
 class ValidasiDesainController extends Controller
 {
@@ -75,9 +75,7 @@ class ValidasiDesainController extends Controller
             return response()->json(['message' => self::PESAN_BUKAN_ANTREAN], 422);
         }
 
-        $orderId = OrderItem::query()
-            ->where('design_id', $desain->id)
-            ->value('order_id');
+        $orderId = OrderItem::orderIdUntukDesain($desain->id);
 
         DB::transaction(function () use ($desain, $request, $orderId) {
             // Catatan dan batas revisi lama tidak berlaku lagi setelah disetujui,
@@ -157,9 +155,7 @@ class ValidasiDesainController extends Controller
             $this->catatRiwayat($desain, 'perlu_revisi', $catatan, $request->user()->id);
 
             // FR-CDSN-05 #3: pesanan ikut masuk antrean revisi, tanpa batas bayar.
-            $orderId = OrderItem::query()
-                ->where('design_id', $desain->id)
-                ->value('order_id');
+            $orderId = OrderItem::orderIdUntukDesain($desain->id);
 
             if ($orderId !== null) {
                 Order::query()

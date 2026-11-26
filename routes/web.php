@@ -7,5 +7,3 @@ Route::get('/', function () {
         'message' => 'Halaman utama Nichibag',
     ]);
 })->name('home');
-
-// Katalog dibangun terpisah saat FR-KTLG-01: filter aktif, paginasi, harga termurah.

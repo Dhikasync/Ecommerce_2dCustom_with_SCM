@@ -182,7 +182,7 @@ class PembayaranController extends Controller
                 : 'Pesanan ini tidak dapat dibayar';
         }
 
-        // FR-PAYM-01 #4: batas 24 jam tetap ditegakkan walau scheduler belum ada.
+        // FR-PAYM-01 #4: batas bayar ditegakkan di sini dan oleh scheduler.
         if ($pesanan->kadaluwarsa_pada === null || $pesanan->kadaluwarsa_pada->isPast()) {
             return 'Batas pembayaran pesanan sudah lewat';
         }

@@ -9,9 +9,8 @@ use App\Models\Produk\Variant;
 use Illuminate\Support\Facades\DB;
 
 /**
- * FR-PAYM-01 #2/#3/#4/#5, UC-33: satu tempat yang menerjemahkan status Midtrans
- * menjadi keadaan lokal. Tombol "Cek Status Pembayaran" dan webhook nanti sama-
- * sama memakai kelas ini supaya efeknya tidak mungkin berbeda.
+ * FR-PAYM-01 #2-#5, UC-33: satu tempat menerjemahkan status Midtrans.
+ * Dipakai cek-status dan webhook supaya efeknya tidak berbeda.
  */
 class SinkronPembayaran
 {
