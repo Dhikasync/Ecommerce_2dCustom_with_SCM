@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Pesanan;
 
 use App\Http\Controllers\Controller;
+use App\Models\Design;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Services\Pesanan\KabarStatusPesanan;
@@ -88,7 +89,14 @@ class ProduksiController extends Controller
             return response()->json(['message' => 'Pesanan tidak ditemukan'], 404);
         }
 
-        if ($pesanan->status !== 'diproses' || ! $pesanan->orderItems()->whereNotNull('design_id')->exists()) {
+        $designIds = $pesanan->orderItems()->whereNotNull('design_id')->pluck('design_id');
+
+        $disetujui = Design::query()
+            ->whereIn('id', $designIds)
+            ->where('status', 'disetujui')
+            ->count();
+
+        if ($pesanan->status !== 'diproses' || $designIds->isEmpty() || $disetujui !== $designIds->count()) {
             return response()->json(['message' => self::PESAN_TIDAK_VALID], 422);
         }
 

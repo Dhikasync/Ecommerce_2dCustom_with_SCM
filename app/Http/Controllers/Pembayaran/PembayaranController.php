@@ -182,6 +182,18 @@ class PembayaranController extends Controller
                 : 'Pesanan ini tidak dapat dibayar';
         }
 
+        // FR-CDSN-05 #6: status order bukan bukti desain sudah Disetujui.
+        $desain = $pesanan->orderItems()
+            ->whereNotNull('design_id')
+            ->with('design')
+            ->get()
+            ->pluck('design')
+            ->filter();
+
+        if ($desain->isNotEmpty() && $desain->contains(fn ($item) => $item->status !== 'disetujui')) {
+            return 'Pembayaran hanya dapat dilakukan setelah desain disetujui';
+        }
+
         // FR-PAYM-01 #4: batas bayar ditegakkan di sini dan oleh scheduler.
         if ($pesanan->kadaluwarsa_pada === null || $pesanan->kadaluwarsa_pada->isPast()) {
             return 'Batas pembayaran pesanan sudah lewat';
