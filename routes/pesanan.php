@@ -19,11 +19,14 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->name('pesanan.show');
 });
 
-// FR-ORDR-03 #5/#7: aksi produksi hanya untuk Admin Ecommerce.
+// FR-ORDR-03 #5/#6/#7 + FR-ORDR-04 #1/#2: aksi Admin Ecommerce.
 Route::middleware(['auth', 'active', 'role:admin_ecommerce'])->group(function () {
     Route::post('/admin/pesanan/{nomor}/mulai-cetak', [ProduksiController::class, 'mulaiCetak'])
         ->name('admin.pesanan.mulai-cetak');
 
     Route::post('/admin/pesanan/{nomor}/siap-kirim', [ProduksiController::class, 'siapKirim'])
         ->name('admin.pesanan.siap-kirim');
+
+    Route::post('/admin/pesanan/{nomor}/kirim', [ProduksiController::class, 'kirim'])
+        ->name('admin.pesanan.kirim');
 });
