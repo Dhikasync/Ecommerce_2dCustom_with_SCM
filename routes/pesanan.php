@@ -24,6 +24,9 @@ Route::middleware(['auth', 'active'])->group(function () {
 
 // FR-ORDR-03 #5/#6/#7 + FR-ORDR-04 #1/#2: aksi Admin Ecommerce.
 Route::middleware(['auth', 'active', 'role:admin_ecommerce'])->group(function () {
+    Route::get('/admin/pesanan/{nomor}/work-order', [ProduksiController::class, 'workOrder'])
+        ->name('admin.pesanan.work-order');
+
     Route::post('/admin/pesanan/{nomor}/mulai-cetak', [ProduksiController::class, 'mulaiCetak'])
         ->name('admin.pesanan.mulai-cetak');
 

@@ -7,6 +7,7 @@ use App\Models\Design;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Services\Pesanan\KabarStatusPesanan;
+use App\Support\GambarPublik;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,48 @@ class ProduksiController extends Controller
 {
     private const PESAN_TIDAK_VALID = 'Perubahan status tidak valid';
 
+    private const PESAN_WORK_ORDER = 'Work order hanya tersedia untuk pesanan custom yang Diproses';
+
     public function __construct(private readonly KabarStatusPesanan $kabar) {}
+
+    /** FR-ORDR-03 #2: spesifikasi, render final, quantity, dan tenggat SLA. */
+    public function workOrder(Request $request, string $nomor): JsonResponse
+    {
+        $pesanan = Order::query()
+            ->where('nomor_pesanan', $nomor)
+            ->with(['orderItems.design', 'orderItems.variant', 'latestPayment'])
+            ->first();
+
+        if ($pesanan === null) {
+            return response()->json(['message' => 'Pesanan tidak ditemukan'], 404);
+        }
+
+        $item = $pesanan->orderItems->first(fn ($baris) => $baris->design_id !== null);
+
+        if ($pesanan->status !== 'diproses' || $item === null || $item->design?->status !== 'disetujui') {
+            return response()->json(['message' => self::PESAN_WORK_ORDER], 422);
+        }
+
+        $preview = $item->design->preview_gambar;
+        $dibayar = $pesanan->latestPayment?->dibayar_pada;
+        $estimasi = $dibayar === null
+            ? null
+            : $dibayar->copy()->addWeekdays((int) $item->sla_hari);
+
+        return response()->json(['data' => [
+            'nomor_pesanan' => $pesanan->nomor_pesanan,
+            'status' => $pesanan->status,
+            'item' => [
+                'nama_produk' => $item->nama_produk,
+                'nama_varian' => $item->nama_varian,
+                'sku' => $item->sku,
+                'quantity' => $item->quantity,
+                'preview' => $preview === null ? null : GambarPublik::url($preview),
+                'sla_hari' => $item->sla_hari,
+            ],
+            'estimasi_selesai' => $estimasi?->toIso8601String(),
+        ]]);
+    }
 
     /** FR-ORDR-03 #6: custom dari Sedang Dicetak, produk jadi dari Diproses. */
     public function siapKirim(Request $request, string $nomor): JsonResponse
