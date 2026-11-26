@@ -2,15 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Mail\Pesanan\PembayaranMail;
 use App\Models\Auth\User;
 use App\Models\Design;
 use App\Models\DesignRevision;
+use App\Models\Notification;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Produk\Category;
 use App\Models\Produk\Product;
 use App\Models\Template;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -33,6 +36,7 @@ class ValidasiDesainTest extends TestCase
 
         $this->withHeaders(['Accept' => 'application/json']);
         Storage::fake('public');
+        Mail::fake();
     }
 
     private function user(): User
@@ -227,6 +231,23 @@ class ValidasiDesainTest extends TestCase
         $this->assertSame('menunggu_pembayaran', $pesanan->status);
         $this->assertNotNull($pesanan->kadaluwarsa_pada);
         $this->assertSame(24, (int) round(now()->diffInHours($pesanan->kadaluwarsa_pada)));
+    }
+
+    /** FR-PAYM-02 #1: persetujuan desain mengirim link pembayaran ke User. */
+    public function test_setujui_desain_mengirim_notifikasi_link_pembayaran(): void
+    {
+        $desain = $this->desain($this->user(), $this->template($this->produkCustom()));
+        $pesanan = $this->pesananMenungguValidasi($desain);
+        $tautan = route('pesanan.show', $pesanan->nomor_pesanan);
+
+        $this->actingAs($this->adminEcommerce())
+            ->postJson('/admin/validasi-desain/'.$desain->id.'/setujui')
+            ->assertOk();
+
+        $kabar = Notification::where('user_id', $pesanan->user_id)->sole();
+
+        $this->assertStringContainsString($tautan, $kabar->pesan);
+        Mail::assertSent(PembayaranMail::class, fn (PembayaranMail $mail) => str_contains($mail->pesan, $tautan));
     }
 
     // ---------- FR-CDSN-05 #3: meminta revisi ----------

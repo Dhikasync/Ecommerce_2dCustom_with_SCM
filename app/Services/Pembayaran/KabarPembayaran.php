@@ -51,6 +51,28 @@ class KabarPembayaran
         }
     }
 
+    /** FR-PAYM-02 #1: desain Disetujui, User menerima tautan halaman pembayaran. */
+    public function kirimLinkPembayaran(Order $pesanan): void
+    {
+        $tautan = route('pesanan.show', $pesanan->nomor_pesanan);
+        $judul = 'Link pembayaran tersedia';
+        $pesan = 'Desain pesanan '.$pesanan->nomor_pesanan.' telah disetujui. '
+            .'Silakan bayar dalam waktu 24 jam: '.$tautan;
+
+        Notification::create([
+            'user_id' => $pesanan->user_id,
+            'judul' => $judul,
+            'pesan' => $pesan,
+            'tipe' => 'pembayaran',
+        ]);
+
+        try {
+            Mail::to($pesanan->user->email)->send(new PembayaranMail($pesanan, $judul, $pesan));
+        } catch (Throwable $e) {
+            report($e);
+        }
+    }
+
     /**
      * FR-PAYM-01 #2 menetapkan efek Lunas adalah status Diproses. Pesanan yang
      * sudah dibatalkan sebelum notifikasinya sampai tidak berubah status, jadi
