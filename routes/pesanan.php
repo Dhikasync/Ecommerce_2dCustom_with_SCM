@@ -23,4 +23,7 @@ Route::middleware(['auth', 'active'])->group(function () {
 Route::middleware(['auth', 'active', 'role:admin_ecommerce'])->group(function () {
     Route::post('/admin/pesanan/{nomor}/mulai-cetak', [ProduksiController::class, 'mulaiCetak'])
         ->name('admin.pesanan.mulai-cetak');
+
+    Route::post('/admin/pesanan/{nomor}/siap-kirim', [ProduksiController::class, 'siapKirim'])
+        ->name('admin.pesanan.siap-kirim');
 });
