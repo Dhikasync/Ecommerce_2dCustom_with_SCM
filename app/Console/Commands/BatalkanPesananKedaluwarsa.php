@@ -9,8 +9,7 @@ use Illuminate\Console\Command;
 
 /**
  * FR-SYS-01 #1/#7, FR-PAYM-01 #4, FR-PAYM-02 #3: penegakan batas bayar 24 jam.
- * Pemakaian voucher tidak dikembalikan karena FR-CKOT-02/03 (OPSIONAL) belum
- * dibangun — user-story.md:60 menetapkan langkah itu dilewati, pembatalan tetap.
+ * Voucher dilewati sesuai fallback FR-CKOT-02/03 (user-story.md:60).
  */
 class BatalkanPesananKedaluwarsa extends Command
 {

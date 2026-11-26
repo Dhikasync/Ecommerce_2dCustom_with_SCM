@@ -37,9 +37,7 @@ class KabarValidasiDesain
             'tipe' => 'desain',
         ]);
 
-        $orderId = OrderItem::query()
-            ->where('design_id', $desain->id)
-            ->value('order_id');
+        $orderId = OrderItem::orderIdUntukDesain($desain->id);
 
         if ($orderId === null || ($pesanan = Order::with('user')->find($orderId)) === null) {
             return;

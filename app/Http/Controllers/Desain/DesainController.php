@@ -293,9 +293,7 @@ class DesainController extends Controller
                 $perubahan['status'] = 'menunggu_validasi';
                 $perubahan['versi'] = $desain->versi + 1;
 
-                $orderId = OrderItem::query()
-                    ->where('design_id', $desain->id)
-                    ->value('order_id');
+                $orderId = OrderItem::orderIdUntukDesain($desain->id);
 
                 if ($orderId !== null) {
                     Order::query()

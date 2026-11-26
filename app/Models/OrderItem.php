@@ -45,4 +45,12 @@ class OrderItem extends Model
     {
         return $this->hasOne(Review::class);
     }
+
+    /** FR-CDSN-05 #2-#4: desain bertemu pesanan lewat satu baris item. */
+    public static function orderIdUntukDesain(int $designId): ?int
+    {
+        return static::query()
+            ->where('design_id', $designId)
+            ->value('order_id');
+    }
 }
