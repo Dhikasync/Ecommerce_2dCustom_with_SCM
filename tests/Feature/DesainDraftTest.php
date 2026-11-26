@@ -4,18 +4,21 @@ namespace Tests\Feature;
 
 use App\Models\Auth\User;
 use App\Models\Design;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Produk\Category;
 use App\Models\Produk\Product;
 use App\Models\Produk\Variant;
 use App\Models\Template;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
  * FR-CDSN-02 #1/#9/#10, UC-17: draft desain disimpan, dibuka kembali, dan
  * diubah; rujukan gambar unggahan pindah ke folder desain supaya tidak hilang
- * saat daftar sementara dibersihkan.
+ * saat daftar sementara dibersihkan. FR-CDSN-05 #4 menguji kirim ulang revisi.
  */
 class DesainDraftTest extends TestCase
 {
@@ -114,6 +117,33 @@ class DesainDraftTest extends TestCase
             'template_id' => $template->id,
             'data_desain' => ['elemen' => $elemen],
         ], $ganti);
+    }
+
+    /** FR-CDSN-05 #4: pesanan yang sedang menunggu revisi desain. */
+    private function pesananMenungguRevisi(Design $desain): Order
+    {
+        $pesanan = Order::create([
+            'user_id' => $desain->user_id,
+            'nomor_pesanan' => 'INV-'.strtoupper((string) Str::ulid()),
+            'status' => 'menunggu_revisi_desain',
+            'subtotal_barang' => 150000,
+            'ongkir' => 0,
+            'total' => 150000,
+            'nama_penerima' => 'Andhi',
+            'no_hp' => '+628123456789',
+            'alamat_pengiriman' => 'Jl. Sumur Bandung No. 1',
+        ]);
+
+        OrderItem::create([
+            'order_id' => $pesanan->id,
+            'design_id' => $desain->id,
+            'nama_produk' => 'Tas Rotan Custom',
+            'quantity' => 1,
+            'harga_satuan' => 150000,
+            'sla_hari' => 7,
+        ]);
+
+        return $pesanan;
     }
 
     // ---------- FR-CDSN-02 #9: menyimpan progres sebagai draft ----------
@@ -375,6 +405,50 @@ class DesainDraftTest extends TestCase
 
         Storage::disk('public')->assertMissing($lama);
         Storage::disk('public')->assertExists('desain/gambar/'.$desain->id.'/baru.png');
+    }
+
+    /** FR-CDSN-05 #4: kirim ulang revisi mengembalikan desain dan pesanan ke antrean. */
+    public function test_kirim_ulang_revisi_mengembalikan_status_desain_dan_pesanan(): void
+    {
+        $template = $this->template($this->produkCustom());
+        $desain = $this->desain($this->user(), $template, [
+            'status' => 'perlu_revisi',
+            'catatan_revisi' => 'Logo terlalu kecil',
+            'versi' => 2,
+        ]);
+        $pesanan = $this->pesananMenungguRevisi($desain);
+
+        $this->actingAs($desain->user)
+            ->putJson('/desain/'.$desain->id, $this->dataDraft($template, [
+                $this->elemenTeks(['isi' => 'Nichibag revisi']),
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.status', 'menunggu_validasi')
+            ->assertJsonPath('data.versi', 3);
+
+        $desain->refresh();
+        $pesanan->refresh();
+
+        $this->assertSame('menunggu_validasi', $desain->status);
+        $this->assertSame('menunggu_validasi', $pesanan->status);
+        $this->assertSame('Nichibag revisi', $desain->data_desain['elemen'][0]['isi']);
+    }
+
+    /** FR-CDSN-05 #4: menyimpan draft biasa tidak boleh dikirim ke validasi. */
+    public function test_menyimpan_draft_tidak_mengubah_status_validasi(): void
+    {
+        $template = $this->template($this->produkCustom());
+        $desain = $this->desain($this->user(), $template);
+
+        $this->actingAs($desain->user)
+            ->putJson('/desain/'.$desain->id, $this->dataDraft($template, [
+                $this->elemenTeks(['isi' => 'Draft biasa']),
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.status', 'draft')
+            ->assertJsonPath('data.versi', 1);
+
+        $this->assertSame('draft', $desain->refresh()->status);
     }
 
     public function test_desain_milik_user_lain_dijawab_404(): void

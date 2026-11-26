@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Desain;
 
 use App\Http\Controllers\Controller;
 use App\Models\Design;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Produk\Product;
 use App\Models\Produk\Variant;
 use App\Models\Template;
@@ -265,7 +267,7 @@ class DesainController extends Controller
         ], 201);
     }
 
-    /** FR-CDSN-02 #9/#10: perbarui draft atau desain yang diminta revisi. */
+    /** FR-CDSN-02 #9/#10 + FR-CDSN-05 #4: simpan draft, atau kirim ulang revisi. */
     public function ubah(Request $request, int $id): JsonResponse
     {
         $desain = $this->milikUser($request, $id);
@@ -281,10 +283,29 @@ class DesainController extends Controller
         $data = $this->validasi($request, $desain);
 
         DB::transaction(function () use ($desain, $data, $request) {
-            $desain->update([
+            $perubahan = [
                 'data_desain' => ['elemen' => $this->pindahkanGambar($desain, $data['data_desain']['elemen'], $request)],
                 'variant_id' => $data['variant_id'] ?? $desain->variant_id,
-            ]);
+            ];
+
+            if ($desain->status === 'perlu_revisi') {
+                // FR-CDSN-05 #4/#5: desain kembali ke antrean dengan versi baru.
+                $perubahan['status'] = 'menunggu_validasi';
+                $perubahan['versi'] = $desain->versi + 1;
+
+                $orderId = OrderItem::query()
+                    ->where('design_id', $desain->id)
+                    ->value('order_id');
+
+                if ($orderId !== null) {
+                    Order::query()
+                        ->whereKey($orderId)
+                        ->where('status', 'menunggu_revisi_desain')
+                        ->update(['status' => 'menunggu_validasi']);
+                }
+            }
+
+            $desain->update($perubahan);
         });
 
         return response()->json([
