@@ -7,6 +7,7 @@ use App\Models\Design;
 use App\Models\DesignRevision;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Services\Pembayaran\KabarPembayaran;
 use App\Support\GambarPublik;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,10 +15,13 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * FR-CDSN-05 #2/#3/#5, UC-18: antrean validasi desain untuk Admin Ecommerce.
- * #2/#3 sudah menyentuh pesanan; #4/#7 menyusul bersama notifikasi.
+ * #2/#3 sudah menyentuh pesanan; #2 juga mengirim link bayar.
+ * #4/#7 menyusul bersama notifikasi revisi.
  */
 class ValidasiDesainController extends Controller
 {
+    public function __construct(private readonly KabarPembayaran $kabar) {}
+
     private const PESAN_TIDAK_DITEMUKAN = 'Desain tidak ditemukan';
 
     private const PESAN_BUKAN_ANTREAN = 'Desain ini tidak sedang menunggu validasi';
@@ -68,7 +72,11 @@ class ValidasiDesainController extends Controller
             return response()->json(['message' => self::PESAN_BUKAN_ANTREAN], 422);
         }
 
-        DB::transaction(function () use ($desain, $request) {
+        $orderId = OrderItem::query()
+            ->where('design_id', $desain->id)
+            ->value('order_id');
+
+        DB::transaction(function () use ($desain, $request, $orderId) {
             // Catatan dan batas revisi lama tidak berlaku lagi setelah disetujui,
             // tetapi tetap tersimpan di riwayat.
             $desain->update([
@@ -80,10 +88,6 @@ class ValidasiDesainController extends Controller
             $this->catatRiwayat($desain, 'disetujui', null, $request->user()->id);
 
             // FR-CDSN-05 #2 + srs.md:822: order custom terbuka 24 jam sejak disetujui.
-            $orderId = OrderItem::query()
-                ->where('design_id', $desain->id)
-                ->value('order_id');
-
             if ($orderId !== null) {
                 Order::query()
                     ->whereKey($orderId)
@@ -94,6 +98,16 @@ class ValidasiDesainController extends Controller
                     ]);
             }
         });
+
+        // FR-PAYM-02 #1: kabar dikirim setelah commit, hanya bila order benar
+        // dibuka pada giliran ini.
+        if ($orderId !== null) {
+            $pesanan = Order::find($orderId);
+
+            if ($pesanan !== null && $pesanan->status === 'menunggu_pembayaran') {
+                $this->kabar->kirimLinkPembayaran($pesanan);
+            }
+        }
 
         return response()->json([
             'message' => 'Desain disetujui',
