@@ -132,4 +132,80 @@ class ProduksiController extends Controller
             ],
         ]);
     }
+
+    /** FR-ORDR-04 #1/#2: Admin menginput nomor resi untuk pesanan Siap Kirim. */
+    public function kirim(Request $request, string $nomor): JsonResponse
+    {
+        $pesanan = Order::query()
+            ->where('nomor_pesanan', $nomor)
+            ->first();
+
+        if ($pesanan === null) {
+            return response()->json(['message' => 'Pesanan tidak ditemukan'], 404);
+        }
+
+        if ($pesanan->status !== 'siap_kirim') {
+            return response()->json(['message' => self::PESAN_TIDAK_VALID], 422);
+        }
+
+        $data = $request->validate([
+            'nomor_resi' => ['required', 'string', 'max:255'],
+        ], [
+            'nomor_resi.required' => 'Nomor resi wajib diisi',
+        ]);
+
+        $resi = trim($data['nomor_resi']);
+
+        if ($resi === '') {
+            return response()->json([
+                'message' => 'Nomor resi wajib diisi',
+                'errors' => ['nomor_resi' => ['Nomor resi wajib diisi']],
+            ], 422);
+        }
+
+        $berubah = DB::transaction(function () use ($pesanan, $request, $resi) {
+            $segar = Order::whereKey($pesanan->id)->lockForUpdate()->first();
+
+            if ($segar === null || $segar->status !== 'siap_kirim') {
+                return false;
+            }
+
+            OrderStatusHistory::create([
+                'order_id' => $segar->id,
+                'status_lama' => 'siap_kirim',
+                'status_baru' => 'dikirim',
+                'diubah_oleh' => $request->user()->id,
+            ]);
+
+            $segar->update([
+                'status' => 'dikirim',
+                'nomor_resi' => $resi,
+                'dikirim_pada' => now(),
+            ]);
+
+            return true;
+        });
+
+        if (! $berubah) {
+            return response()->json(['message' => self::PESAN_TIDAK_VALID], 422);
+        }
+
+        $segar = $pesanan->refresh();
+        $tautan = route('pesanan.show', $segar->nomor_pesanan);
+
+        $this->kabar->kirim(
+            $segar,
+            'Pesanan dikirim',
+            'Pesanan '.$segar->nomor_pesanan.' dikirim dengan nomor resi '.$resi.'. Lacak: '.$tautan,
+        );
+
+        return response()->json([
+            'message' => 'Pesanan dikirim',
+            'data' => [
+                'nomor_pesanan' => $segar->nomor_pesanan,
+                'status' => $segar->status,
+                'nomor_resi' => $segar->nomor_resi,
+            ],
+        ]);
+    }
 }
