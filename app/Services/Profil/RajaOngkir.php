@@ -116,6 +116,26 @@ class RajaOngkir
         return $hasil;
     }
 
+    /** FR-ORDR-04 #3: status + manifest AWB; tidak ada URL dari endpoint ini. */
+    public function lacakWaybill(string $awb, string $kurir, string $lastPhone): array
+    {
+        $response = $this->kirim(
+            fn (PendingRequest $peminta) => $peminta->asForm()->post('/track/waybill', [
+                'awb' => $awb,
+                'courier' => $kurir,
+                'last_phone_number' => $lastPhone,
+            ]),
+        );
+
+        $data = $this->bacaData($response, 'Respons RajaOngkir tidak memuat data tracking');
+
+        if (! isset($data['summary']) || ! is_array($data['summary'])) {
+            throw new RajaOngkirException('Bentuk data tracking tidak dikenali');
+        }
+
+        return $data;
+    }
+
     /**
      * Satu pintu keluar HTTP: gangguan sementara diulang sekali sebelum menyerah.
      * 4xx tidak diulang karena kunci atau permintaan yang salah bukan gangguan.

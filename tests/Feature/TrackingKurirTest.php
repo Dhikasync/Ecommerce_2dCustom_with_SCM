@@ -88,7 +88,7 @@ class TrackingKurirTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_kurir_yang_mendukung_awb_belum_punya_tautan(): void
+    public function test_kurir_yang_mendukung_awb_pakai_pesan_fallback_saat_api_gagal(): void
     {
         $pesanan = $this->pesanan('jne');
 
@@ -96,8 +96,8 @@ class TrackingKurirTest extends TestCase
             ->getJson('/pesanan/'.$pesanan->nomor_pesanan)
             ->assertOk()
             ->assertJsonPath('data.tautan_lacak', null)
-            ->assertJsonPath('data.pesan_tracking', null);
+            ->assertJsonPath('data.pesan_tracking', 'Status pengiriman belum tersedia, silakan coba lagi');
 
-        Http::assertNothingSent();
+        Http::assertSentCount(1);
     }
 }

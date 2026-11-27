@@ -6,12 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Services\Pesanan\KabarStatusPesanan;
+use App\Services\Profil\RajaOngkir;
 use App\Support\PelacakanKurir;
 use App\Support\RingkasanPesanan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 /**
  * FR-ORDR-01, UC-32: User melihat status dan riwayat pesanannya sendiri.
@@ -21,7 +23,10 @@ class PesananController extends Controller
 {
     private const PESAN_TIDAK_DITEMUKAN = 'Pesanan tidak ditemukan';
 
-    public function __construct(private readonly KabarStatusPesanan $kabar) {}
+    public function __construct(
+        private readonly KabarStatusPesanan $kabar,
+        private readonly RajaOngkir $rajaongkir,
+    ) {}
 
     /**
      * FR-ORDR-01 #1: daftar pesanan dengan filter status pesanan. Sembilan
@@ -70,15 +75,69 @@ class PesananController extends Controller
 
         $kode = $pesanan->courier?->kode;
 
-        if ($pesanan->status === 'dikirim' && ($kode === null || ! PelacakanKurir::didukung($kode))) {
-            $data['pesan_tracking'] = PelacakanKurir::PESAN_TIDAK_TERSEDIA;
+        if ($pesanan->status === 'dikirim') {
+            if ($kode !== null && PelacakanKurir::didukung($kode)) {
+                $data = $this->lengkapiWaybill($data, $pesanan, $kode);
+            } else {
+                $data['pesan_tracking'] = PelacakanKurir::PESAN_TIDAK_TERSEDIA;
 
-            if ($kode !== null) {
-                $data['tautan_lacak'] = PelacakanKurir::tautanUntukTidakDidukung($kode);
+                if ($kode !== null) {
+                    $data['tautan_lacak'] = PelacakanKurir::tautanUntukTidakDidukung($kode);
+                }
             }
         }
 
         return response()->json(['data' => $data]);
+    }
+
+    /** @param array<string, mixed> $data */
+    private function lengkapiWaybill(array $data, Order $pesanan, string $kode): array
+    {
+        $lastPhone = PelacakanKurir::limaDigitTerakhir((string) $pesanan->no_hp);
+
+        if ($lastPhone === null) {
+            $data['pesan_tracking'] = 'Nomor penerima tidak valid untuk pelacakan';
+
+            return $data;
+        }
+
+        if ($pesanan->nomor_resi === null) {
+            $data['pesan_tracking'] = 'Nomor resi belum tersedia';
+
+            return $data;
+        }
+
+        try {
+            $hasil = $this->rajaongkir->lacakWaybill($pesanan->nomor_resi, $kode, $lastPhone);
+            $status = $hasil['delivery_status']['status'] ?? $hasil['summary']['status'] ?? '';
+            $data['pesan_tracking'] = $this->terjemahkanStatus((string) $status);
+            $data['riwayat_tracking'] = collect($hasil['manifest'] ?? [])
+                ->filter(fn ($baris) => is_array($baris))
+                ->map(fn (array $baris) => [
+                    'manifest_code' => (string) ($baris['manifest_code'] ?? ''),
+                    'manifest_description' => (string) ($baris['manifest_description'] ?? ''),
+                    'manifest_date' => (string) ($baris['manifest_date'] ?? ''),
+                    'manifest_time' => (string) ($baris['manifest_time'] ?? ''),
+                    'city_name' => (string) ($baris['city_name'] ?? ''),
+                ])
+                ->all();
+        } catch (Throwable $e) {
+            report($e);
+            $data['pesan_tracking'] = 'Status pengiriman belum tersedia, silakan coba lagi';
+        }
+
+        return $data;
+    }
+
+    private function terjemahkanStatus(string $status): string
+    {
+        return match (strtoupper($status)) {
+            'DELIVERED' => 'Paket sudah diterima',
+            'IN TRANSIT', 'IN_TRANSIT' => 'Paket dalam perjalanan',
+            'PENDING' => 'Paket belum dikirim',
+            '' => 'Status pengiriman belum tersedia',
+            default => 'Status pengiriman: '.$status,
+        };
     }
 
     /** FR-ORDR-04 #4: User menyatakan paket diterima. */
