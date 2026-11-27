@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Desain\DesainController;
 use App\Http\Controllers\Pesanan\PesananController;
 use App\Http\Controllers\Pesanan\ProduksiController;
 use Illuminate\Support\Facades\Route;
@@ -26,6 +27,9 @@ Route::middleware(['auth', 'active'])->group(function () {
 Route::middleware(['auth', 'active', 'role:admin_ecommerce'])->group(function () {
     Route::get('/admin/pesanan', [ProduksiController::class, 'daftar'])
         ->name('admin.pesanan.index');
+
+    Route::put('/admin/pesanan/{nomor}/desain', [DesainController::class, 'ubahOlehAdmin'])
+        ->name('admin.pesanan.desain.update');
 
     Route::get('/admin/pesanan/{nomor}/work-order', [ProduksiController::class, 'workOrder'])
         ->name('admin.pesanan.work-order');

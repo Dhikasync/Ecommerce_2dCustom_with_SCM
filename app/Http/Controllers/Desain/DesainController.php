@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Desain;
 
 use App\Http\Controllers\Controller;
 use App\Models\Design;
+use App\Models\DesignRevision;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Produk\Product;
@@ -319,6 +320,52 @@ class DesainController extends Controller
 
         return response()->json([
             'message' => 'Desain berhasil disimpan',
+            'data' => $this->ringkas($desain->fresh('template'), denganData: true),
+        ]);
+    }
+
+    /** FR-ORDR-03 #4: Admin menyunting desain pesanan sebelum cetak. */
+    public function ubahOlehAdmin(Request $request, string $nomor): JsonResponse
+    {
+        $pesanan = Order::query()
+            ->where('nomor_pesanan', $nomor)
+            ->first();
+
+        if ($pesanan === null) {
+            return response()->json(['message' => 'Pesanan tidak ditemukan'], 404);
+        }
+
+        if ($pesanan->status === 'sedang_dicetak') {
+            return response()->json(['message' => self::PESAN_SEDANG_DICETAK], 422);
+        }
+
+        $item = $pesanan->orderItems()->whereNotNull('design_id')->first();
+        $desain = $item === null ? null : Design::with('template')->find($item->design_id);
+
+        if ($desain === null) {
+            return response()->json(['message' => self::PESAN_TIDAK_DITEMUKAN], 404);
+        }
+
+        $data = $this->validasi($request, $desain);
+
+        DB::transaction(function () use ($desain, $data, $request) {
+            DesignRevision::create([
+                'design_id' => $desain->id,
+                'versi' => $desain->versi,
+                'data_desain' => $desain->data_desain,
+                'preview_gambar' => $desain->preview_gambar,
+                'status' => $desain->status,
+                'divalidasi_oleh' => $request->user()->id,
+            ]);
+
+            $desain->update([
+                'data_desain' => ['elemen' => $this->pindahkanGambar($desain, $data['data_desain']['elemen'], $request)],
+                'versi' => $desain->versi + 1,
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Desain diperbarui Admin',
             'data' => $this->ringkas($desain->fresh('template'), denganData: true),
         ]);
     }
