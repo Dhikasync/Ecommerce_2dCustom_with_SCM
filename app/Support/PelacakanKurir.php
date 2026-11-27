@@ -36,4 +36,12 @@ class PelacakanKurir
     {
         return ! self::didukung($kode) && ! array_key_exists($kode, self::TIDAK_DIDUKUNG);
     }
+
+    /** FR-ORDR-04 #3: lima digit terakhir sebagai string, bukan integer. */
+    public static function limaDigitTerakhir(string $noHp): ?string
+    {
+        $digit = preg_replace('/\D+/', '', $noHp) ?? '';
+
+        return strlen($digit) < 5 ? null : substr($digit, -5);
+    }
 }
