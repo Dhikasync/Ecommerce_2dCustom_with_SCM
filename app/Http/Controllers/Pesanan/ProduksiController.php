@@ -25,13 +25,12 @@ class ProduksiController extends Controller
 
     public function __construct(private readonly KabarStatusPesanan $kabar) {}
 
-    /** FR-ORDR-03 #1: daftar pesanan yang perlu diproses Admin Ecommerce. */
+    /** FR-ORDR-03 #1/#3: antrean produksi diurutkan menurut tenggat SLA. */
     public function daftar(): JsonResponse
     {
         $daftar = Order::query()
             ->whereIn('status', ['diproses', 'sedang_dicetak', 'siap_kirim'])
             ->with(['orderItems.design', 'latestPayment'])
-            ->orderBy('id')
             ->get();
 
         $data = $daftar->map(function (Order $pesanan) {
@@ -39,7 +38,7 @@ class ProduksiController extends Controller
             $sla = $pesanan->orderItems->pluck('sla_hari')->filter()->max();
             $estimasi = $dibayar === null || $sla === null
                 ? null
-                : $dibayar->copy()->addWeekdays((int) $sla)->toIso8601String();
+                : $dibayar->copy()->addWeekdays((int) $sla);
 
             return [
                 'id' => $pesanan->id,
@@ -66,10 +65,16 @@ class ProduksiController extends Controller
                     'sla_hari' => $item->sla_hari,
                 ]),
                 'sla_hari' => $sla,
-                'estimasi_selesai' => $estimasi,
+                'lewat_sla' => $estimasi !== null && $estimasi->isPast(),
+                'estimasi_selesai' => $estimasi?->toIso8601String(),
                 'dibuat_pada' => $pesanan->created_at?->toIso8601String(),
+                '_urutan' => $estimasi?->getTimestamp() ?? PHP_INT_MAX,
             ];
-        });
+        })->sortBy('_urutan')->map(function (array $baris) {
+            unset($baris['_urutan']);
+
+            return $baris;
+        })->values();
 
         return response()->json(['data' => $data]);
     }

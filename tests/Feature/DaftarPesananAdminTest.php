@@ -33,7 +33,8 @@ class DaftarPesananAdminTest extends TestCase
         return User::factory()->create(['role' => 'admin_ecommerce']);
     }
 
-    private function pesanan(string $status, bool $custom = false): Order
+    /** @param array<string, mixed> $gantiItem */
+    private function pesanan(string $status, bool $custom = false, array $gantiItem = [], array $gantiPembayaran = []): Order
     {
         $user = User::factory()->create();
 
@@ -76,7 +77,7 @@ class DaftarPesananAdminTest extends TestCase
             'label_lokasi' => 'GUBENG, SURABAYA',
         ]);
 
-        $pesanan->orderItems()->create([
+        $pesanan->orderItems()->create(array_merge([
             'variant_id' => $varian->id,
             'design_id' => $desain?->id,
             'nama_produk' => $produk->nama,
@@ -85,15 +86,15 @@ class DaftarPesananAdminTest extends TestCase
             'quantity' => 2,
             'harga_satuan' => 150000,
             'sla_hari' => $custom ? 3 : null,
-        ]);
+        ], $gantiItem));
 
-        Payment::create([
+        Payment::create(array_merge([
             'order_id' => $pesanan->id,
             'snap_token' => 'token-admin',
             'jumlah' => 150000,
             'status' => 'lunas',
             'dibayar_pada' => now()->subDay(),
-        ]);
+        ], $gantiPembayaran));
 
         return $pesanan;
     }
@@ -147,5 +148,22 @@ class DaftarPesananAdminTest extends TestCase
     public function test_guest_tidak_bisa_membuka_daftar_admin(): void
     {
         $this->getJson('/admin/pesanan')->assertUnauthorized();
+    }
+
+    /** FR-ORDR-03 #3: tenggat terdekat dulu, yang lewat ditandai. */
+    public function test_antrian_diurutkan_berdasarkan_tenggat_sla_dan_lewat(): void
+    {
+        $lewat = $this->pesanan('diproses', true, ['sla_hari' => 1], ['dibayar_pada' => now()->subDays(10)]);
+        $dekat = $this->pesanan('diproses', true, ['sla_hari' => 2], ['dibayar_pada' => now()->subDay()]);
+        $jauh = $this->pesanan('diproses', true, ['sla_hari' => 10], ['dibayar_pada' => now()->subDay()]);
+
+        $this->actingAs($this->admin())
+            ->getJson('/admin/pesanan')
+            ->assertOk()
+            ->assertJsonPath('data.0.nomor_pesanan', $lewat->nomor_pesanan)
+            ->assertJsonPath('data.0.lewat_sla', true)
+            ->assertJsonPath('data.1.nomor_pesanan', $dekat->nomor_pesanan)
+            ->assertJsonPath('data.1.lewat_sla', false)
+            ->assertJsonPath('data.2.nomor_pesanan', $jauh->nomor_pesanan);
     }
 }
