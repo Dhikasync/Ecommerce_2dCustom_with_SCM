@@ -25,6 +25,8 @@ class TrackingKurirTest extends TestCase
     {
         parent::setUp();
 
+        config(['services.rajaongkir.key' => 'test-key']);
+
         $this->user = User::factory()->create();
         Http::fake();
     }

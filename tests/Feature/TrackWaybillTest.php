@@ -24,6 +24,9 @@ class TrackWaybillTest extends TestCase
     {
         parent::setUp();
 
+        // CI memakai .env.example dengan API key kosong; client menolak sebelum HTTP.
+        config(['services.rajaongkir.key' => 'test-key']);
+
         $this->user = User::factory()->create();
     }
 
