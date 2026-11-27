@@ -30,6 +30,8 @@ class DesainController extends Controller
 
     private const PESAN_TIDAK_BISA_DIUBAH = 'Desain ini tidak dapat diubah lagi';
 
+    private const PESAN_SEDANG_DICETAK = 'Desain tidak dapat diubah karena pesanan sedang dalam proses cetak';
+
     /** FR-CDSN-04 #4: dokumen hanya meminta "pesan error", kalimat ini dipilih di sini. */
     private const PESAN_GAGAL_RENDER = 'Preview gagal dimuat, periksa kembali elemen desain';
 
@@ -267,13 +269,22 @@ class DesainController extends Controller
         ], 201);
     }
 
-    /** FR-CDSN-02 #9/#10 + FR-CDSN-05 #4: simpan draft, atau kirim ulang revisi. */
+    /** FR-CDSN-02 #9/#10, FR-CDSN-05 #4, FR-ORDR-03 #8: ubah desain. */
     public function ubah(Request $request, int $id): JsonResponse
     {
         $desain = $this->milikUser($request, $id);
 
         if ($desain === null) {
             return $this->tidakDitemukan();
+        }
+
+        $sedangDicetak = OrderItem::query()
+            ->where('design_id', $desain->id)
+            ->whereHas('order', fn ($query) => $query->where('status', 'sedang_dicetak'))
+            ->exists();
+
+        if ($sedangDicetak) {
+            return response()->json(['message' => self::PESAN_SEDANG_DICETAK], 422);
         }
 
         if (! in_array($desain->status, self::STATUS_BISA_DIUBAH, true)) {

@@ -480,4 +480,41 @@ class DesainDraftTest extends TestCase
             $desain->refresh()->data_desain,
         );
     }
+
+    /** FR-ORDR-03 #8: desain pesanan Sedang Dicetak tidak bisa diubah. */
+    public function test_desain_tidak_bisa_diubah_saat_pesanan_sedang_dicetak(): void
+    {
+        $template = $this->template($this->produkCustom());
+        $desain = $this->desain($this->user(), $template, ['status' => 'disetujui']);
+
+        $pesanan = Order::create([
+            'user_id' => $desain->user_id,
+            'nomor_pesanan' => 'INV-'.strtoupper((string) Str::ulid()),
+            'status' => 'sedang_dicetak',
+            'subtotal_barang' => 150000,
+            'ongkir' => 0,
+            'total' => 150000,
+            'nama_penerima' => 'Andhi',
+            'no_hp' => '+628123456789',
+            'alamat_pengiriman' => 'Jl. Sumur Bandung No. 1',
+        ]);
+
+        $pesanan->orderItems()->create([
+            'design_id' => $desain->id,
+            'nama_produk' => 'Tas Rotan Custom',
+            'quantity' => 1,
+            'harga_satuan' => 150000,
+            'sla_hari' => 7,
+        ]);
+
+        $this->actingAs($desain->user)
+            ->putJson('/desain/'.$desain->id, ['data_desain' => ['elemen' => []]])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Desain tidak dapat diubah karena pesanan sedang dalam proses cetak');
+
+        $this->assertEquals(
+            ['elemen' => [$this->elemenTeks()]],
+            $desain->refresh()->data_desain,
+        );
+    }
 }
