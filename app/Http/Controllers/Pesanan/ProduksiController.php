@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Services\Pesanan\KabarStatusPesanan;
 use App\Support\GambarPublik;
+use App\Support\RingkasanPesanan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,55 @@ class ProduksiController extends Controller
     private const PESAN_WORK_ORDER = 'Work order hanya tersedia untuk pesanan custom yang Diproses';
 
     public function __construct(private readonly KabarStatusPesanan $kabar) {}
+
+    /** FR-ORDR-03 #1: daftar pesanan yang perlu diproses Admin Ecommerce. */
+    public function daftar(): JsonResponse
+    {
+        $daftar = Order::query()
+            ->whereIn('status', ['diproses', 'sedang_dicetak', 'siap_kirim'])
+            ->with(['orderItems.design', 'latestPayment'])
+            ->orderBy('id')
+            ->get();
+
+        $data = $daftar->map(function (Order $pesanan) {
+            $dibayar = $pesanan->latestPayment?->dibayar_pada;
+            $sla = $pesanan->orderItems->pluck('sla_hari')->filter()->max();
+            $estimasi = $dibayar === null || $sla === null
+                ? null
+                : $dibayar->copy()->addWeekdays((int) $sla)->toIso8601String();
+
+            return [
+                'id' => $pesanan->id,
+                'nomor_pesanan' => $pesanan->nomor_pesanan,
+                'status' => $pesanan->status,
+                'status_pembayaran' => RingkasanPesanan::statusPembayaran($pesanan),
+                'status_desain' => RingkasanPesanan::statusDesain($pesanan),
+                'alamat' => [
+                    'nama_penerima' => $pesanan->nama_penerima,
+                    'no_hp' => $pesanan->no_hp,
+                    'alamat_pengiriman' => $pesanan->alamat_pengiriman,
+                    'label_lokasi' => $pesanan->label_lokasi,
+                ],
+                'item' => $pesanan->orderItems->map(fn ($item) => [
+                    'nama_produk' => $item->nama_produk,
+                    'nama_varian' => $item->nama_varian,
+                    'sku' => $item->sku,
+                    'quantity' => $item->quantity,
+                    'harga_satuan' => $item->harga_satuan,
+                    'subtotal' => $item->quantity * $item->harga_satuan,
+                    'preview' => $item->design?->preview_gambar === null
+                        ? null
+                        : GambarPublik::url($item->design->preview_gambar),
+                    'sla_hari' => $item->sla_hari,
+                ]),
+                'sla_hari' => $sla,
+                'estimasi_selesai' => $estimasi,
+                'dibuat_pada' => $pesanan->created_at?->toIso8601String(),
+            ];
+        });
+
+        return response()->json(['data' => $data]);
+    }
 
     /** FR-ORDR-03 #2: spesifikasi, render final, quantity, dan tenggat SLA. */
     public function workOrder(Request $request, string $nomor): JsonResponse
