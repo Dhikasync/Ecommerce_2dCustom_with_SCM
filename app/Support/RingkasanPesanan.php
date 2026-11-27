@@ -95,10 +95,8 @@ class RingkasanPesanan
                 'layanan' => $pesanan->courier->layanan,
             ],
             'dikirim_pada' => $pesanan->dikirim_pada?->toIso8601String(),
-            // FR-ORDR-04 #3: dokumen mengizinkan tautan eksternal, bukan API tracking sendiri.
-            'tautan_lacak' => $pesanan->nomor_resi === null || blank(config('services.tracking.base_url'))
-                ? null
-                : rtrim((string) config('services.tracking.base_url'), '/').'/'.rawurlencode($pesanan->nomor_resi),
+            // FR-ORDR-04 #3: tidak ada URL dummy; tautan diisi dari sumber resmi saat tersedia.
+            'tautan_lacak' => null,
             'selesai_pada' => $pesanan->selesai_pada?->toIso8601String(),
             'riwayat' => $pesanan->statusHistories
                 ->sortBy('id')
