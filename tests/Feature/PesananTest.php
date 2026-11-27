@@ -332,22 +332,38 @@ class PesananTest extends TestCase
     }
 
     /** NFR-SEC-03: pesanan User lain dijawab sama seperti pesanan yang tidak ada. */
-    /** FR-ORDR-04 #3: pesanan Dikirim memuat tautan lacak eksternal. */
+    // TEST FIXTURE — BUKAN contoh asli RajaOngkir; hanya menguji perakitan URL.
     public function test_detail_pesanan_dikirim_memuat_tautan_lacak(): void
     {
+        config(['services.tracking.base_url' => 'https://tracker.test/']);
+
         $pesanan = $this->pesanan([
             'status' => 'dikirim',
             'nomor_resi' => 'JP123456789',
             'dikirim_pada' => now()->subDay(),
         ]);
 
-        $tautan = rtrim((string) config('services.tracking.base_url'), '/').'/JP123456789';
-
         $this->actingAs($this->user)
             ->getJson('/pesanan/'.$pesanan->nomor_pesanan)
             ->assertOk()
             ->assertJsonPath('data.nomor_resi', 'JP123456789')
-            ->assertJsonPath('data.tautan_lacak', $tautan);
+            ->assertJsonPath('data.tautan_lacak', 'https://tracker.test/JP123456789');
+    }
+
+    public function test_detail_tanpa_konfigurasi_tracking_tidak_menghasilkan_url(): void
+    {
+        config(['services.tracking.base_url' => null]);
+
+        $pesanan = $this->pesanan([
+            'status' => 'dikirim',
+            'nomor_resi' => 'JP123456789',
+            'dikirim_pada' => now()->subDay(),
+        ]);
+
+        $this->actingAs($this->user)
+            ->getJson('/pesanan/'.$pesanan->nomor_pesanan)
+            ->assertOk()
+            ->assertJsonPath('data.tautan_lacak', null);
     }
 
     public function test_detail_pesanan_belum_dikirim_tidak_punya_tautan_lacak(): void

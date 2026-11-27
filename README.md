@@ -157,7 +157,7 @@ DB_USERNAME=postgres
 DB_PASSWORD=...
 RAJAONGKIR_API_KEY=...          # kosong membuat pencarian lokasi dan ongkir gagal
 RAJAONGKIR_BASE_URL=https://rajaongkir.komerce.id/api/v1
-TRACKING_BASE_URL=https://www.resi.co.id/   # tautan lacak eksternal (FR-ORDR-04 #3)
+TRACKING_BASE_URL=                          # isi URL pelacakan resmi; kosong = tautan null
 ```
 
 Lalu:
@@ -235,7 +235,7 @@ php artisan test
 
 Pengujian berjalan di basis data terpisah `nichibag_test` (diatur di `phpunit.xml`), memakai PostgreSQL — bukan SQLite — supaya constraint dan tipe kolom yang dipakai produksi ikut teruji.
 
-Status terakhir: **619 test lulus, 2411 assertion** (dijalankan lokal dan otomatis di CI).
+Status terakhir: **620 test lulus, 2413 assertion** (dijalankan lokal dan otomatis di CI).
 
 Setiap push dan pull request ke `main` menjalankan `.github/workflows/tests.yml` di GitHub Actions: PHP 8.5, PostgreSQL 18, pemeriksaan format Laravel Pint, lalu seluruh test. Pekerjaan dianggap selesai hanya kalau badge CI hijau.
 
@@ -429,7 +429,7 @@ SRS dan User Story tidak mengatur hal-hal berikut; nilainya dipilih saat impleme
 - **Nomor pesanan `INV-<ULID>`**: dokumen hanya mewajibkan `nomor_pesanan` unik. ULID dipilih karena tidak perlu membaca ulang baris setelah insert (kolomnya NOT NULL) dan urut waktu, sehingga mudah ditelusuri; formatnya boleh berubah tanpa mengubah aturan bisnis.
 - **Pesan "Keranjang berubah, periksa kembali item Anda" adalah pilihan implementasi**: skenario #7 hanya menetapkan sistem membatalkan pembuatan pesanan dan menampilkan penjelasan item bermasalah, tanpa kalimat baku. Yang dipakai sebagai penjelasan adalah `label` item dari dokumen ("Produk tidak tersedia", "Stok tidak mencukupi", pesan MOQ). Pemeriksaan yang sama diulang di dalam transaksi; kalau stok habis di antara dua langkah, jawabannya tetap `422` dengan label yang sama.
 - **"Mulai Cetak" hanya untuk custom yang Diproses (FR-ORDR-03 #5/#7)**: endpoint admin menolak pesanan tanpa `order_items.design_id` dan status selain `diproses`, karena #5 mensyaratkan desain Disetujui dan pembayaran Lunas. Status dibaca ulang di bawah kunci sebelum diubah, dan riwayat menyimpan `diubah_oleh` Admin supaya FR-ORDR-01 #2 tidak menampilkannya sebagai aksi Sistem.
-- **Pelacakan memakai tautan eksternal (FR-ORDR-04 #3)**: `srs.md:299` memperbolehkan tautan eksternal sebagai alternatif API kurir, jadi detail pesanan mengirim `tautan_lacak` dari `TRACKING_BASE_URL` (default `https://www.resi.co.id/`) + nomor resi yang di-`rawurlencode`. Field bernilai `null` sebelum ada nomor resi.
+- **Pelacakan memakai tautan eksternal (FR-ORDR-04 #3)**: `srs.md:299` memperbolehkan tautan eksternal sebagai alternatif API kurir, jadi detail pesanan mengirim `tautan_lacak` dari `TRACKING_BASE_URL` + nomor resi yang di-`rawurlencode`. **Default sengaja kosong** — tidak ada URL dummy; field bernilai `null` sebelum ada nomor resi atau sebelum Admin/owner mengisi URL pelacakan resmi. Tes memakai `https://tracker.test/` sebagai TEST FIXTURE, bukan contoh asli RajaOngkir.
 - **Prioritas antrean memakai tenggat SLA (FR-ORDR-03 #3)**: daftar diurutkan setelah `estimasi_selesai` dihitung, bukan berdasarkan `id`. Pesanan tanpa SLA diletakkan terakhir; penanda `lewat_sla` adalah boolean karena dokumen hanya meminta "ditandai khusus" tanpa menetapkan format. Kunci pengurut internal dibuang sebelum respons supaya kontrak #1 tidak berubah.
 - **Antrean Admin hanya tiga status (FR-ORDR-03 #1)**: `GET /admin/pesanan` sengaja tidak menampilkan sembilan status Lampiran B — #1 menyebut hanya `diproses`, `sedang_dicetak`, dan `siap_kirim`. `estimasi_selesai` memakai SLA maksimum antar item dan tanggal Lunas, konsisten dengan work order #2.
 - **Desain dikunci saat produksi (FR-ORDR-03 #8 + FR-PAYM-02 #4)**: pengecekan status `sedang_dicetak` didahulukan sebelum penjagaan status desain supaya alasannya spesifik, bukan sekadar "Desain ini tidak dapat diubah lagi". Penyesuaian oleh Admin lewat editor 2D (#4) masih belum dibangun.

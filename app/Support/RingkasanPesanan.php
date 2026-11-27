@@ -96,7 +96,7 @@ class RingkasanPesanan
             ],
             'dikirim_pada' => $pesanan->dikirim_pada?->toIso8601String(),
             // FR-ORDR-04 #3: dokumen mengizinkan tautan eksternal, bukan API tracking sendiri.
-            'tautan_lacak' => $pesanan->nomor_resi === null
+            'tautan_lacak' => $pesanan->nomor_resi === null || blank(config('services.tracking.base_url'))
                 ? null
                 : rtrim((string) config('services.tracking.base_url'), '/').'/'.rawurlencode($pesanan->nomor_resi),
             'selesai_pada' => $pesanan->selesai_pada?->toIso8601String(),

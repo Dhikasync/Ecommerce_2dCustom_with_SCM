@@ -59,7 +59,7 @@ return [
      * mencakup lokasi dan tarif, bukan endpoint tracking.
      */
     'tracking' => [
-        'base_url' => env('TRACKING_BASE_URL', 'https://www.resi.co.id/'),
+        'base_url' => env('TRACKING_BASE_URL', ''),
     ],
 
 ];
