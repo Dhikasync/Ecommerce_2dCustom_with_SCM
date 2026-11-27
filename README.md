@@ -242,6 +242,14 @@ Keamanan sesi: password yang berubah (lewat reset maupun dari halaman profil) la
 
 Token verifikasi email disimpan sebagai hash SHA-256, bukan token asli, sehingga isi tabel `users` yang bocor tidak bisa dipakai memverifikasi email orang lain. Email selalu disimpan dalam huruf kecil, dan redirect setelah login hanya diterima kalau host tujuannya sama dengan `APP_URL`.
 
+### Catatan untuk presentasi (simulasi)
+
+- Status **pesanan** diubah lewat aksi yang memang ada di dokumen: Admin menekan "Mulai Cetak" (#5), "Siap Kirim" (#6), menginput nomor resi (FR-ORDR-04 #1), dan User menekan "Pesanan Diterima" (#4). Tidak ada tombol untuk mengubah status **tracking**.
+- Status **tracking** berasal dari ekspedisi dan dibaca otomatis lewat `POST track/waybill` saat detail pesanan `Dikirim` dibuka. Aplikasi hanya membaca `summary.status` + `manifest[]`, tidak menyimpannya ke database, dan tidak menentukan nilainya.
+- Bukti logika untuk presentasi adalah tes otomatis yang memakai **TEST FIXTURE — BUKAN contoh asli RajaOngkir**. Fixture hanya memakai field terverifikasi (`awb`, `courier`, `last_phone_number`, `delivered`, `summary`, `manifest`) untuk membuktikan perakitan request dan tampilan respons.
+- Tanpa AWB sungguhan dari kurir, aplikasi menampilkan pesan fallback `"Status pengiriman belum tersedia, silakan coba lagi"`. Itu hasil yang jujur untuk simulasi, bukan kegagalan fitur dan bukan alasan untuk mengarang status.
+- Untuk kurir tanpa dukungan AWB, detail menampilkan `"tracking tidak tersedia untuk kurir ini"` beserta homepage resmi terverifikasi; `sentral` sengaja bernilai `null` karena situsnya tidak dapat diverifikasi.
+
 ## Sebelum dipasang di produksi
 
 Nilai di `.env.example` disetel untuk pengembangan lokal. Saat memasang di server, ubah minimal:
