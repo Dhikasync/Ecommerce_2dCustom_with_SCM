@@ -22,8 +22,11 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->name('pesanan.terima');
 });
 
-// FR-ORDR-03 #5/#6/#7 + FR-ORDR-04 #1/#2: aksi Admin Ecommerce.
+// FR-ORDR-03 #1/#2/#5/#6/#7 + FR-ORDR-04 #1/#2: aksi Admin Ecommerce.
 Route::middleware(['auth', 'active', 'role:admin_ecommerce'])->group(function () {
+    Route::get('/admin/pesanan', [ProduksiController::class, 'daftar'])
+        ->name('admin.pesanan.index');
+
     Route::get('/admin/pesanan/{nomor}/work-order', [ProduksiController::class, 'workOrder'])
         ->name('admin.pesanan.work-order');
 
