@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Services\Pesanan\KabarStatusPesanan;
+use App\Support\PelacakanKurir;
 use App\Support\RingkasanPesanan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,8 +49,7 @@ class PesananController extends Controller
     }
 
     /**
-     * FR-ORDR-01 #2: detail terpisah — status pesanan, pembayaran, dan desain,
-     * ditambah item, alamat, kurir, dan riwayat status.
+     * FR-ORDR-01 #2 + FR-ORDR-04 #3: detail pesanan beserta kabar pelacakan.
      */
     public function show(Request $request, string $nomor): JsonResponse
     {
@@ -64,7 +64,21 @@ class PesananController extends Controller
             return response()->json(['message' => self::PESAN_TIDAK_DITEMUKAN], 404);
         }
 
-        return response()->json(['data' => RingkasanPesanan::untukDetail($pesanan)]);
+        $data = RingkasanPesanan::untukDetail($pesanan);
+        $data['pesan_tracking'] = null;
+        $data['riwayat_tracking'] = [];
+
+        $kode = $pesanan->courier?->kode;
+
+        if ($pesanan->status === 'dikirim' && ($kode === null || ! PelacakanKurir::didukung($kode))) {
+            $data['pesan_tracking'] = PelacakanKurir::PESAN_TIDAK_TERSEDIA;
+
+            if ($kode !== null) {
+                $data['tautan_lacak'] = PelacakanKurir::tautanUntukTidakDidukung($kode);
+            }
+        }
+
+        return response()->json(['data' => $data]);
     }
 
     /** FR-ORDR-04 #4: User menyatakan paket diterima. */
