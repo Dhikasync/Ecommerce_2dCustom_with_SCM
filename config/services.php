@@ -54,4 +54,12 @@ return [
         'is_production' => (bool) env('MIDTRANS_IS_PRODUCTION', false),
     ],
 
+    /*
+     * FR-ORDR-04 #3: pelacakan memakai tautan eksternal; integrasi SI-02 hanya
+     * mencakup lokasi dan tarif, bukan endpoint tracking.
+     */
+    'tracking' => [
+        'base_url' => env('TRACKING_BASE_URL', 'https://www.resi.co.id/'),
+    ],
+
 ];
